@@ -1,0 +1,46 @@
+const BASE = '/api';
+
+async function request(method, path, body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+
+  const res = await fetch(`${BASE}${path}`, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export const api = {
+  get: (path) => request('GET', path),
+  post: (path, body) => request('POST', path, body),
+  patch: (path, body) => request('PATCH', path, body),
+  delete: (path) => request('DELETE', path),
+
+  /**
+   * Connect to an SSE endpoint. Returns an EventSource.
+   * @param {string} path - API path
+   * @param {function} onMessage - called with parsed JSON data
+   * @param {function} onError - called on error
+   */
+  sse(path, onMessage, onError) {
+    const source = new EventSource(`${BASE}${path}`);
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onMessage(data);
+      } catch (e) {
+        console.error('SSE parse error:', e);
+      }
+    };
+    source.onerror = (err) => {
+      if (onError) onError(err);
+      source.close();
+    };
+    return source;
+  },
+};
