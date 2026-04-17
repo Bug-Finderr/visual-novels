@@ -121,7 +121,34 @@ export async function initDatabase() {
   db = new DbWrapper(sqlDb, config.DB_PATH);
   db.pragma('foreign_keys = ON');
   runMigrations();
+  runSchemaUpgrades();
   logger.info('Database initialized at', config.DB_PATH);
+}
+
+function columnExists(table, column) {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all();
+  return rows.some((r) => r.name === column);
+}
+
+function runSchemaUpgrades() {
+  if (!columnExists('sessions', 'statement_index')) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN statement_index INTEGER DEFAULT 0`);
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS played_statements (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id  TEXT NOT NULL,
+      kind        TEXT NOT NULL,
+      speaker_id  TEXT,
+      speaker     TEXT,
+      text        TEXT NOT NULL,
+      label_name  TEXT,
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_played_statements_session
+      ON played_statements(session_id, created_at);
+  `);
 }
 
 function runMigrations() {

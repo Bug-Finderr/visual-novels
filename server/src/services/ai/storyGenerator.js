@@ -1,5 +1,6 @@
 import { ai, models } from './geminiClient.js';
 import { buildWorldPrompt } from './prompts/worldBuilding.js';
+import { withRetry } from './retry.js';
 import logger from '../../utils/logger.js';
 
 export const storyGenerator = {
@@ -7,7 +8,7 @@ export const storyGenerator = {
     const prompt = buildWorldPrompt(setup);
 
     logger.info('Generating world with Gemini Pro...');
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: models.storyPro,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
@@ -15,7 +16,7 @@ export const storyGenerator = {
         maxOutputTokens: 65536,
         responseMimeType: 'application/json',
       },
-    });
+    }), { label: 'storyGenerator.generateWorld' });
 
     // Concatenate all text parts from the response
     let text = '';

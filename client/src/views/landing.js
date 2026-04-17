@@ -1,5 +1,6 @@
 import { navigate } from '../utils/router.js';
 import { api } from '../services/api.js';
+import { escapeHtml } from '../utils/escape.js';
 
 export async function renderLanding(container) {
   container.innerHTML = `
@@ -14,52 +15,45 @@ export async function renderLanding(container) {
         </div>
       </div>
       <div class="landing-sessions" id="recent-sessions" style="display:none;">
-        <h3>Recent Stories</h3>
+        <div class="landing-sessions-header">
+          <h3>Recent Stories</h3>
+          <a class="landing-link" id="btn-all-sessions" href="#/sessions">See all</a>
+        </div>
         <div id="session-list"></div>
       </div>
     </div>
   `;
 
-  container.querySelector('#btn-new-game').addEventListener('click', () => {
-    navigate('/setup');
-  });
+  container.querySelector('#btn-new-game').addEventListener('click', () => navigate('/setup'));
+  container.querySelector('#btn-load-game').addEventListener('click', () => navigate('/sessions'));
 
-  container.querySelector('#btn-load-game').addEventListener('click', () => {
-    navigate('/sessions');
-  });
-
-  // Show recent sessions
   try {
     const sessions = await api.get('/sessions');
-    if (sessions.length > 0) {
-      const recentDiv = container.querySelector('#recent-sessions');
-      recentDiv.style.display = 'block';
-      const listDiv = container.querySelector('#session-list');
-      listDiv.innerHTML = sessions
-        .slice(0, 3)
-        .map(
-          (s) => `
-        <div class="session-card-mini" data-id="${s.id}">
-          <span class="session-title">${s.title}</span>
-          <span class="session-status badge-${s.status}">${s.status}</span>
-        </div>
-      `
-        )
-        .join('');
+    if (sessions.length === 0) return;
 
-      listDiv.querySelectorAll('.session-card-mini').forEach((card) => {
-        card.addEventListener('click', () => {
-          const id = card.dataset.id;
-          const session = sessions.find((s) => s.id === id);
-          if (session.status === 'ready' || session.status === 'playing') {
-            navigate(`/game/${id}`);
-          } else if (session.status === 'generating') {
-            navigate(`/loading/${id}`);
-          }
-        });
+    const recentDiv = container.querySelector('#recent-sessions');
+    recentDiv.style.display = 'block';
+    const listDiv = container.querySelector('#session-list');
+
+    listDiv.innerHTML = sessions.slice(0, 5)
+      .map((s) => `
+        <div class="session-card-mini" data-id="${escapeHtml(s.id)}" data-status="${escapeHtml(s.status)}">
+          <span class="session-title">${escapeHtml(s.title)}</span>
+          <span class="session-status badge badge-${escapeHtml(s.status)}">${escapeHtml(s.status)}</span>
+        </div>
+      `)
+      .join('');
+
+    listDiv.querySelectorAll('.session-card-mini').forEach((card) => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.id;
+        const status = card.dataset.status;
+        if (status === 'ready' || status === 'playing') navigate(`/game/${id}`);
+        else if (status === 'generating') navigate(`/loading/${id}`);
+        else navigate('/sessions');
       });
-    }
-  } catch (e) {
-    // Server might not be running yet — that's fine
+    });
+  } catch (err) {
+    console.warn('Sessions list unavailable:', err.message);
   }
 }

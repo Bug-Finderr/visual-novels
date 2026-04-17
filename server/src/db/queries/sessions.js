@@ -51,8 +51,17 @@ export const sessionQueries = {
   updateCurrentLabel(id, label) {
     const db = getDb();
     return db.prepare(`
-      UPDATE sessions SET current_label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      UPDATE sessions SET current_label = ?, statement_index = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).run(label, id);
+  },
+
+  updatePosition(id, label, statementIndex) {
+    const db = getDb();
+    return db.prepare(`
+      UPDATE sessions
+      SET current_label = ?, statement_index = ?, updated_at = CURRENT_TIMESTAMP, last_played_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(label, statementIndex, id);
   },
 
   updateLastPlayed(id) {

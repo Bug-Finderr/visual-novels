@@ -1,4 +1,6 @@
 import { sessionService } from '../services/sessionService.js';
+import { sessionQueries } from '../db/queries/sessions.js';
+import { playedStatementsQueries } from '../db/queries/playedStatements.js';
 
 export const sessionController = {
   create(req, res) {
@@ -48,5 +50,42 @@ export const sessionController = {
   getScenes(req, res) {
     const scenes = sessionService.getScenes(req.params.id);
     res.json(scenes);
+  },
+
+  updatePosition(req, res) {
+    const { id } = req.params;
+    const { label, index } = req.body;
+    if (typeof label !== 'string' || typeof index !== 'number') {
+      return res.status(400).json({ error: 'label (string) and index (number) required' });
+    }
+    const session = sessionQueries.getById(id);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    sessionQueries.updatePosition(id, label, index);
+    res.json({ ok: true });
+  },
+
+  recordPlayed(req, res) {
+    const { id } = req.params;
+    const { kind, speakerId, speaker, text, labelName } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'text required' });
+    }
+    const validKinds = ['narration', 'dialogue', 'player_choice', 'player_input'];
+    if (!validKinds.includes(kind)) {
+      return res.status(400).json({ error: `kind must be one of ${validKinds.join(', ')}` });
+    }
+    playedStatementsQueries.insert(id, {
+      kind,
+      speakerId: speakerId || null,
+      speaker: speaker || null,
+      text: text.slice(0, 4000),
+      labelName: labelName || null,
+    });
+    res.status(201).json({ ok: true });
+  },
+
+  getHistory(req, res) {
+    const rows = playedStatementsQueries.getAll(req.params.id);
+    res.json(rows);
   },
 };

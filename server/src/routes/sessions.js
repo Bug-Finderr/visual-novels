@@ -15,5 +15,8 @@ router.delete('/:id', sessionController.delete);
 router.patch('/:id', sessionController.patch);
 router.get('/:id/characters', sessionController.getCharacters);
 router.get('/:id/scenes', sessionController.getScenes);
+router.post('/:id/position', sessionController.updatePosition);
+router.post('/:id/played', sessionController.recordPlayed);
+router.get('/:id/history', sessionController.getHistory);
 
 export default router;

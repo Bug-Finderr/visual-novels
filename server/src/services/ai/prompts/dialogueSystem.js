@@ -48,11 +48,13 @@ You must respond with valid JSON in this exact format:
 }
 
 RULES:
-- Generate 5-15 statements per response
-- Always end with 2-3 choices for the player
+- Generate 3-7 statements per response — keep each under 220 characters
+- Favor dialogue over narration; narration should be 1-2 sentences max
+- Never stack more than 2 narration statements in a row
+- Always end with 2-3 short choices (each choice text ≤ 60 chars)
 - Set allowFreeInput to true when it makes sense for the player to speak freely
 - Stay in character for each character's personality and speech style
-- Keep dialogue natural and engaging
+- Keep dialogue natural and punchy — real speech, not speeches
 - If a NEW character needs to appear that doesn't exist yet, set newCharacterIntroduced to: { "name": "Name", "appearance": "detailed appearance", "personality": "personality", "role": "role", "speechStyle": "how they talk", "color": "#hexcolor" }
 - If a scene change to a NEW location is needed, set sceneChangeNeeded to: { "id": "snake_case_id", "name": "Display Name", "description": "detailed visual description for image generation" }
 - Never break the fourth wall

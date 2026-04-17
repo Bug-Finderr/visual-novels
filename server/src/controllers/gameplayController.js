@@ -107,6 +107,7 @@ async function processAiResponse(sessionId, aiOutput) {
       session.setup_art_style
     );
     sceneQueries.markImageGenerated(sessionId, sceneData.id);
+    sessionQueries.updateCurrentScene(sessionId, sceneData.id);
 
     newScene = { id: sceneData.id, name: sceneData.name };
   }
@@ -120,7 +121,14 @@ async function processAiResponse(sessionId, aiOutput) {
     scriptBuilder.saveLabel(sessionId, name, stmts);
   }
 
-  // Update session current label
+  // If the AI emitted scene_change statements to existing scenes, pin the latest as current.
+  const aiStatements = Array.isArray(aiOutput.statements) ? aiOutput.statements : [];
+  const lastSceneSwitch = [...aiStatements].reverse().find((s) => s && s.type === 'scene_change' && s.sceneId);
+  if (lastSceneSwitch) {
+    sessionQueries.updateCurrentScene(sessionId, lastSceneSwitch.sceneId);
+  }
+
+  // Update session current label (resets statement_index too)
   sessionQueries.updateCurrentLabel(sessionId, labelName);
 
   return {

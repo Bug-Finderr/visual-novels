@@ -73,12 +73,14 @@ OUTPUT FORMAT: You MUST respond with valid JSON matching this exact schema:
 RULES:
 - Generate exactly 3-5 characters (NOT including the protagonist, who is the player)
 - Generate exactly 5 initial background scenes
-- The openingScript should have 20-40 statements covering the first scene
-- Include at least 2 choice points in the opening (statements with type "choice" that have a "choices" array)
+- The openingScript should have 12-20 statements covering the first scene — tight, punchy pacing
+- Each statement's text must be under 220 characters; favor dialogue over long narration
+- Never stack more than 2 narration statements in a row
+- Include at least 1 choice point in the opening (statement with type "choice" that has a "choices" array)
 - Character appearances must be EXTREMELY detailed for consistent image generation
 - Scene descriptions must be EXTREMELY detailed for image generation
 - All character IDs must be valid JavaScript identifiers (no spaces, start with letter, use underscores)
 - Opening script must establish the setting, introduce at least 2 characters, and present the first conflict
-- Each choice should have 2-3 options
+- Each choice should have 2-3 options; choice text ≤ 60 chars each
 - Use only these expressions: happy, sad, angry, surprised, neutral, embarrassed, thinking, scared, determined, smug`;
 }

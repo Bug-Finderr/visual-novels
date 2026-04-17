@@ -1,5 +1,6 @@
 import { ai, models } from './geminiClient.js';
 import { buildDialogueSystemPrompt } from './prompts/dialogueSystem.js';
+import { withRetry } from './retry.js';
 import { sessionQueries } from '../../db/queries/sessions.js';
 import { characterQueries } from '../../db/queries/characters.js';
 import { sceneQueries } from '../../db/queries/scenes.js';
@@ -24,7 +25,7 @@ export const dialogueEngine = {
 
     logger.info(`Processing player action for session ${sessionId}: ${action.type}`);
 
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
       model: models.dialogueFlash,
       contents: messages,
       config: {
@@ -33,7 +34,7 @@ export const dialogueEngine = {
         maxOutputTokens: 3000,
         responseMimeType: 'application/json',
       },
-    });
+    }), { label: 'dialogueEngine.processPlayerAction' });
 
     const responseText = response.candidates[0].content.parts[0].text;
     let aiOutput;
