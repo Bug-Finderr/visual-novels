@@ -173,6 +173,14 @@ p { color: var(--text-secondary); }
   background-position: center;
   background-repeat: no-repeat;
   transition: background-image 0.5s ease;
+  will-change: transform;
+}
+.scene-background.ken-burns {
+  animation: kenBurns 38s ease-in-out infinite alternate;
+}
+@keyframes kenBurns {
+  0%   { transform: scale(1.00) translate(0, 0); }
+  100% { transform: scale(1.06) translate(-1.5%, -1%); }
 }
 
 .characters-layer {
@@ -182,30 +190,96 @@ p { color: var(--text-secondary); }
   align-items: flex-end;
   justify-content: center;
   pointer-events: none;
+  z-index: 1;
 }
 
 .character-sprite {
   position: absolute;
   bottom: 0;
   max-height: 80%;
-  transition: all 0.3s ease;
+  transition: filter 0.45s ease, transform 0.45s ease, opacity 0.4s ease;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
+  will-change: transform, filter;
+  --char-x: 0px;
+  --char-y: 0px;
+  --char-scale: 1;
 }
 .character-sprite img { max-height: 100%; width: auto; object-fit: contain; }
-.position-left { left: 5%; }
-.position-center { left: 50%; transform: translateX(-50%); }
-.position-right { right: 5%; }
+.position-left   { left: 5%;  transform: translate3d(var(--char-x), var(--char-y), 0) scale(var(--char-scale)); transform-origin: bottom left;   }
+.position-center { left: 50%; transform: translate(-50%, 0) translate3d(var(--char-x), var(--char-y), 0) scale(var(--char-scale)); transform-origin: bottom center; }
+.position-right  { right: 5%; transform: translate3d(var(--char-x), var(--char-y), 0) scale(var(--char-scale)); transform-origin: bottom right;  }
+
+/* Speaker focus: speaker slightly larger + saturated; quiet ones desaturate + dim.
+   Note: z-index here is *within* .characters-layer's stacking context so dialogue/choices stay on top. */
+.character-sprite.is-speaker { --char-scale: 1.03; filter: drop-shadow(0 10px 30px rgba(124, 58, 237, 0.45)) saturate(1.05); z-index: 2; }
+.character-sprite.is-quiet   { --char-scale: 0.97; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.4)) saturate(0.65) brightness(0.78); z-index: 1; }
+
+/* Idle breathing — applied to inner stack so it composes with positioning transform on root */
+.anim-stack {
+  position: relative;
+  height: 100%;
+  animation: breath 4.4s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes breath {
+  0%, 100% { transform: translateY(0)      scale(1.000); }
+  50%      { transform: translateY(-0.6%)  scale(1.008); }
+}
+.character-sprite.is-speaker .anim-stack { animation-duration: 3.2s; }
+
+/* Frame stack: only one frame is visible at a time. Instant swap (no transition)
+   so 110ms mouth-flap doesn't blend two frames at partial opacity. */
+.anim-frame {
+  display: block;
+  max-height: 100%;
+  width: auto;
+  opacity: 0;
+  transition: none;
+  will-change: opacity;
+  user-select: none;
+  -webkit-user-drag: none;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+/* Stack absolute frames over the base, matching its rendered size */
+.anim-frame:not(:first-child) {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 100%;
+  width: auto;
+}
+.anim-frame.is-visible { opacity: 1; }
+.character-sprite.anim-static .anim-frame.anim-blink,
+.character-sprite.anim-static .anim-frame.anim-mouth-half,
+.character-sprite.anim-static .anim-frame.anim-mouth-open { display: none; }
+
+/* brief flash when switching expression */
+.character-sprite.expr-change .anim-stack { animation: exprFlash 0.25s ease; }
+@keyframes exprFlash {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(1.18); }
+  100% { filter: brightness(1); }
+}
 
 .dialogue-box {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(10, 10, 20, 0.9);
+  background: linear-gradient(to top, rgba(8, 8, 18, 0.96) 60%, rgba(8, 8, 18, 0.0));
   border-top: 2px solid var(--accent);
-  padding: 1rem 1.5rem 1.25rem;
+  padding: 1.25rem 1.75rem 1.5rem;
   cursor: pointer;
-  min-height: 120px;
+  min-height: 130px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  z-index: 5;
 }
+.dialogue-box:not(.dialogue-active) { transform: translateY(20%); opacity: 0; pointer-events: none; }
+.dialogue-box.dialogue-active     { transform: translateY(0);    opacity: 1; }
 .speaker-name {
   font-weight: 600;
   font-size: 1rem;
@@ -234,25 +308,54 @@ p { color: var(--text-secondary); }
   gap: 0.75rem;
   width: 80%;
   max-width: 500px;
+  z-index: 10;
 }
 
 .choices-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 .choice-btn {
-  padding: 0.75rem 1.25rem;
-  background: rgba(20, 20, 40, 0.9);
-  border: 1px solid var(--accent);
+  padding: 0.85rem 1.25rem;
+  background: rgba(22, 22, 42, 0.92);
+  border: 1px solid rgba(124, 58, 237, 0.55);
   color: var(--text-primary);
-  border-radius: var(--radius);
-  font-size: 0.9rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s;
   text-align: left;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
-.choice-btn:hover { background: rgba(124,58,237,0.3); }
+.choice-btn:hover {
+  background: rgba(124, 58, 237, 0.22);
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.28);
+}
+.choice-btn:active { transform: translateY(0); }
+.choice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  animation: choiceIn 0.32s ease both;
+}
+.choice-card .choice-text { font-weight: 500; }
+.choice-card .choice-hint {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease, max-height 0.25s ease;
+}
+.choice-btn:hover .choice-hint { opacity: 0.85; max-height: 2rem; margin-top: 0.15rem; }
+@keyframes choiceIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 .free-input-panel {
   display: flex;
@@ -294,6 +397,43 @@ p { color: var(--text-secondary); }
 }
 .thinking-indicator span:nth-child(2) { animation-delay: 0.2s; }
 .thinking-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+/* === Start gate (click-to-begin overlay; primes audio autoplay) === */
+.start-gate {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  cursor: pointer;
+  animation: fadeIn 0.4s ease;
+}
+.start-gate-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: center;
+  padding: 2.5rem 3rem;
+  background: rgba(20, 20, 40, 0.85);
+  border: 1px solid rgba(124, 58, 237, 0.55);
+  border-radius: var(--radius-lg);
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.start-gate-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), #a78bfa, #c4b5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.start-gate-hint { font-size: 0.9rem; color: var(--text-secondary); }
+.start-gate-btn { min-width: 160px; }
 
 /* === Animations === */
 .fade-in { animation: fadeIn 0.5s ease; }
