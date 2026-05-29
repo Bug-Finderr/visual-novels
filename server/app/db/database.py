@@ -84,6 +84,46 @@ CREATE TABLE IF NOT EXISTS dialogue_history (
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
+-- Pre-generated full-beat expansions so runtime page-advances hit the cache
+-- instead of an LLM call. Keyed (session_id, beat_index). Wiped on restart.
+CREATE TABLE IF NOT EXISTS beat_expansions (
+  session_id   TEXT NOT NULL,
+  beat_index   INTEGER NOT NULL,
+  statements   TEXT NOT NULL,
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (session_id, beat_index),
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+-- Pre-generated dialogue for each candidate ending. Keyed by ending_id so the
+-- runtime can look up whichever ending the alignment score lands on, with no
+-- live LLM call needed at the final beat.
+CREATE TABLE IF NOT EXISTS ending_dialogue (
+  session_id   TEXT NOT NULL,
+  ending_id    TEXT NOT NULL,
+  statements   TEXT NOT NULL,
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (session_id, ending_id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS saves (
+  id                  TEXT PRIMARY KEY,
+  session_id          TEXT NOT NULL,
+  slot                INTEGER,
+  name                TEXT,
+  current_label       TEXT NOT NULL,
+  statement_index     INTEGER DEFAULT 0,
+  current_scene_id    TEXT,
+  current_beat_index  INTEGER DEFAULT 0,
+  alignment_state     TEXT,
+  chosen_ending_id    TEXT,
+  visible_characters  TEXT,
+  created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_saves_session ON saves(session_id, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_dialogue_history_session
   ON dialogue_history(session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_characters_session
@@ -109,9 +149,38 @@ def init_database() -> None:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Defensive ALTER TABLE for columns added after the initial schema."""
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(characters)").fetchall()}
-    if "voice_caption" not in cols:
+    char_cols = {row[1] for row in conn.execute("PRAGMA table_info(characters)").fetchall()}
+    if "voice_caption" not in char_cols:
         conn.execute("ALTER TABLE characters ADD COLUMN voice_caption TEXT")
+    if "voice_id" not in char_cols:
+        conn.execute("ALTER TABLE characters ADD COLUMN voice_id TEXT")
+    if "gender" not in char_cols:
+        # Explicit gender — drives the TTS voice profile directly so we don't
+        # have to keyword-scan voice_caption. Values: 'female', 'male', or
+        # 'neutral' (non-binary / animal / unknown).
+        conn.execute("ALTER TABLE characters ADD COLUMN gender TEXT")
+
+    sess_cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()}
+    # Spine model: pre-generated 10-beat story arc + 5 candidate endings.
+    # alignment_state tracks {ending_id: weight} updated as the player chooses;
+    # current_beat_index advances each time the AI marks a beat complete.
+    if "story_spine" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN story_spine TEXT")
+    if "endings" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN endings TEXT")
+    if "alignment_state" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN alignment_state TEXT DEFAULT '{}'")
+    if "current_beat_index" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN current_beat_index INTEGER DEFAULT 0")
+    if "chosen_ending_id" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN chosen_ending_id TEXT")
+    # Chapter continuation — a child session links back to the parent it
+    # continues from, and chapter_number is the 1-based position in the
+    # sequence. Standalone sessions have parent_session_id NULL + chapter 1.
+    if "parent_session_id" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN parent_session_id TEXT")
+    if "chapter_number" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN chapter_number INTEGER DEFAULT 1")
 
 
 @contextmanager

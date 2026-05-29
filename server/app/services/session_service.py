@@ -25,6 +25,33 @@ def create(setup: dict) -> dict:
     return {"id": session_id, "title": title}
 
 
+def create_continuation(parent: dict) -> dict:
+    """Create a child session that picks up where `parent` left off.
+
+    Copies the parent's setup verbatim and increments chapter_number; the
+    generation pipeline will detect the parent_session_id + chapter > 1
+    and call story_generator.generate_world with the continuation context.
+    """
+    session_id = str(uuid4())
+    parent_chapter = int(parent.get("chapter_number") or 1)
+    chapter_number = parent_chapter + 1
+    title = f"Chapter {chapter_number} — {parent.get('setup_setting', '')[:40]}"
+    session_queries.create({
+        "id": session_id,
+        "title": title,
+        "status": "created",
+        "setup_genre": parent["setup_genre"],
+        "setup_art_style": parent["setup_art_style"],
+        "setup_setting": parent["setup_setting"],
+        "setup_protagonist_name": parent["setup_protagonist_name"],
+        "setup_protagonist_personality": parent["setup_protagonist_personality"],
+        "setup_tone": parent["setup_tone"],
+        "setup_premise": parent.get("setup_premise"),
+    })
+    session_queries.set_chapter_parent(session_id, parent["id"], chapter_number)
+    return {"id": session_id, "title": title, "chapterNumber": chapter_number}
+
+
 def get_all() -> list[dict]:
     return session_queries.get_all()
 
@@ -57,6 +84,9 @@ def save_story_data(session_id: str, story_data: dict) -> None:
     )
 
     for char in story_data["characters"]:
+        gender = (char.get("gender") or "").lower().strip() or None
+        if gender not in {"female", "male", "neutral", None}:
+            gender = None
         character_queries.insert(session_id, {
             "id": char["id"],
             "name": char["name"],
@@ -69,9 +99,14 @@ def save_story_data(session_id: str, story_data: dict) -> None:
             "speech_style": char.get("speechStyle"),
             "quirks": char.get("quirks") or [],
             "voice_caption": char.get("voiceCaption"),
+            "gender": gender,
         })
 
-    for scene in story_data["initialScenes"]:
+    # `scenes` is the COMPLETE list — opening scenes, mid-arc settings, and
+    # every ending's finalSceneId — generated together so no asset is needed
+    # at runtime.
+    scenes = story_data.get("scenes") or story_data.get("initialScenes") or []
+    for scene in scenes:
         scene_queries.insert(session_id, {
             "id": scene["id"],
             "name": scene["name"],
@@ -79,8 +114,14 @@ def save_story_data(session_id: str, story_data: dict) -> None:
             "narrative_context": scene.get("narrativeContext"),
         })
 
-    if story_data["initialScenes"]:
-        session_queries.update_current_scene(session_id, story_data["initialScenes"][0]["id"])
+    if scenes:
+        session_queries.update_current_scene(session_id, scenes[0]["id"])
+
+    # Persist the spine + ending catalogue + seed alignment_state.
+    spine = story_data.get("storySpine") or []
+    endings = story_data.get("endings") or []
+    if spine and endings:
+        session_queries.save_spine(session_id, story_spine=spine, endings=endings)
 
 
 def patch(session_id: str, fields: dict) -> None:

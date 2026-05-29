@@ -11,6 +11,7 @@ def insert(session_id: str, character: dict) -> None:
         "relationship": None,
         "speech_style": None,
         "voice_caption": None,
+        "gender": None,
         **character,
         "session_id": session_id,
         "quirks": json.dumps(character.get("quirks") or []),
@@ -19,9 +20,9 @@ def insert(session_id: str, character: dict) -> None:
         conn.execute(
             """
             INSERT INTO characters (id, session_id, name, color, role, personality, appearance,
-                backstory, relationship, speech_style, quirks, is_dynamic, voice_caption)
+                backstory, relationship, speech_style, quirks, is_dynamic, voice_caption, gender)
             VALUES (:id, :session_id, :name, :color, :role, :personality, :appearance,
-                :backstory, :relationship, :speech_style, :quirks, :is_dynamic, :voice_caption)
+                :backstory, :relationship, :speech_style, :quirks, :is_dynamic, :voice_caption, :gender)
             """,
             params,
         )
@@ -49,4 +50,12 @@ def mark_sprites_generated(session_id: str, character_id: str) -> None:
         conn.execute(
             "UPDATE characters SET sprites_generated = 1 WHERE session_id = ? AND id = ?",
             (session_id, character_id),
+        )
+
+
+def set_voice_id(session_id: str, character_id: str, voice_id: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE characters SET voice_id = ? WHERE session_id = ? AND id = ?",
+            (voice_id, session_id, character_id),
         )

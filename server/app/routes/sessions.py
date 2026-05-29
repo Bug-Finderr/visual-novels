@@ -50,3 +50,24 @@ def get_characters(session_id: str):
 @router.get("/{session_id}/scenes")
 def get_scenes(session_id: str):
     return session_service.get_scenes(session_id)
+
+
+@router.post("/{session_id}/continue", status_code=201)
+def continue_to_next_chapter(session_id: str):
+    """Spawn a child session continuing from this one's chosen ending.
+
+    Requires the parent to have a chosen_ending_id (the player must have
+    actually reached an ending). The child has the same setup + parent
+    linkage; its generation pipeline detects the parent and runs the
+    continuation world-build prompt instead of a fresh one.
+    """
+    parent = session_service.get_by_id(session_id)
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent session not found")
+    if not parent.get("chosen_ending_id"):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot continue — the previous chapter hasn't reached an ending yet.",
+        )
+    child = session_service.create_continuation(parent)
+    return child

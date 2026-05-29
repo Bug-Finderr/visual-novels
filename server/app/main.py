@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import config
 from app.db.database import init_database
 from app.logger import logger
-from app.routes import assets, gameplay, generation, sessions
+from app.routes import assets, gameplay, generation, saves, sessions, tts_stream
 
 
 @asynccontextmanager
@@ -31,6 +31,8 @@ app.include_router(sessions.router)
 app.include_router(generation.router)
 app.include_router(gameplay.router)
 app.include_router(assets.router)
+app.include_router(tts_stream.router)
+app.include_router(saves.router)
 
 
 @app.get("/api/health")

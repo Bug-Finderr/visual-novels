@@ -5,9 +5,15 @@ export async function renderSessions(container) {
   container.innerHTML = `
     <div class="sessions-view">
       <button class="btn btn-ghost back-btn" id="btn-back">&larr; Back</button>
-      <h2>Your Stories</h2>
-      <div id="sessions-list" class="sessions-list">
-        <p class="loading-text">Loading...</p>
+
+      <header class="page-header">
+        <div class="ornament">Library</div>
+        <h1 class="display-title">Your tales</h1>
+        <p class="page-subtitle">Each playthrough is one of a kind.</p>
+      </header>
+
+      <div id="sessions-list" class="sessions-grid">
+        <div class="empty-state"><p>Loading…</p></div>
       </div>
     </div>
   `;
@@ -21,8 +27,10 @@ export async function renderSessions(container) {
     if (sessions.length === 0) {
       listEl.innerHTML = `
         <div class="empty-state">
-          <p>No stories yet. Create your first one!</p>
-          <button class="btn btn-primary" id="btn-create">Create Story</button>
+          <p>The shelves are empty. Begin a new tale.</p>
+          <button class="btn btn-primary btn-lg" id="btn-create">
+            <span class="btn-icon">&#10022;</span> Author a tale
+          </button>
         </div>
       `;
       listEl.querySelector('#btn-create').addEventListener('click', () => navigate('/setup'));
@@ -37,17 +45,18 @@ export async function renderSessions(container) {
           <h3 class="session-card-title">${s.title}</h3>
           <div class="session-card-meta">
             <span class="badge badge-${s.status}">${s.status}</span>
+            ${(s.chapter_number && s.chapter_number > 1) ? `<span class="session-card-genre">Chapter ${s.chapter_number}</span>` : ''}
             <span class="session-card-genre">${s.setup_genre}</span>
             <span class="session-card-tone">${s.setup_tone}</span>
           </div>
-          <p class="session-card-date">Created: ${new Date(s.created_at).toLocaleDateString()}</p>
+          <p class="session-card-date">${new Date(s.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p>
         </div>
         <div class="session-card-actions">
           ${
             s.status === 'ready' || s.status === 'playing'
-              ? '<button class="btn btn-primary btn-play">Play</button>'
+              ? '<button class="btn btn-primary btn-play">&#9656; Read</button>'
               : s.status === 'generating'
-              ? '<button class="btn btn-secondary btn-progress">View Progress</button>'
+              ? '<button class="btn btn-secondary btn-progress">Progress</button>'
               : ''
           }
           <button class="btn btn-danger btn-delete">Delete</button>
@@ -57,7 +66,6 @@ export async function renderSessions(container) {
       )
       .join('');
 
-    // Bind event listeners
     listEl.querySelectorAll('.session-card').forEach((card) => {
       const id = card.dataset.id;
 
@@ -73,7 +81,7 @@ export async function renderSessions(container) {
 
       card.querySelector('.btn-delete').addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm('Delete this story? This cannot be undone.')) {
+        if (confirm('Delete this tale? This cannot be undone.')) {
           await api.delete(`/sessions/${id}`);
           renderSessions(container);
         }

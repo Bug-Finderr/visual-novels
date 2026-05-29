@@ -5,6 +5,55 @@ from app.db.database import db, row_to_dict, rows_to_list
 _ALLOWED_PATCH_FIELDS = {"title", "status", "current_scene_id", "current_label"}
 
 
+def save_spine(
+    session_id: str,
+    *,
+    story_spine: list,
+    endings: list,
+) -> None:
+    """Persist the pre-generated story spine + ending catalogue.
+    alignment_state is seeded with 0 for every ending id so the dialogue engine
+    can simply add weights without first-touch initialization.
+    """
+    seed = {e["id"]: 0 for e in endings if e.get("id")}
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE sessions
+            SET story_spine = ?, endings = ?, alignment_state = ?,
+                current_beat_index = 0, chosen_ending_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (json.dumps(story_spine), json.dumps(endings),
+             json.dumps(seed), session_id),
+        )
+
+
+def update_alignment(session_id: str, alignment_state: dict) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET alignment_state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps(alignment_state), session_id),
+        )
+
+
+def advance_beat(session_id: str, new_index: int) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET current_beat_index = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_index, session_id),
+        )
+
+
+def set_chosen_ending(session_id: str, ending_id: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET chosen_ending_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (ending_id, session_id),
+        )
+
+
 def create(session: dict) -> None:
     with db() as conn:
         conn.execute(
@@ -18,12 +67,25 @@ def create(session: dict) -> None:
         )
 
 
+def set_chapter_parent(session_id: str, parent_id: str, chapter_number: int) -> None:
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE sessions
+            SET parent_session_id = ?, chapter_number = ?
+            WHERE id = ?
+            """,
+            (parent_id, chapter_number, session_id),
+        )
+
+
 def get_all() -> list[dict]:
     with db() as conn:
         rows = conn.execute(
             """
             SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
-              created_at, updated_at, last_played_at
+              created_at, updated_at, last_played_at,
+              parent_session_id, chapter_number
             FROM sessions ORDER BY updated_at DESC
             """
         ).fetchall()

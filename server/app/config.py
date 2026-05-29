@@ -28,6 +28,12 @@ class Config:
     PUPPETEER_TIMEOUT: float = float(os.getenv("PUPPETEER_TIMEOUT", "60"))
     TTS_URL: str | None = os.getenv("TTS_URL")  # e.g. http://34.182.211.49:8001
     TTS_TIMEOUT: float = float(os.getenv("TTS_TIMEOUT", "120"))
+    # Silk / Mulberry TTS (rumik.ai). When SILK_API_KEY is set, this is the
+    # active TTS backend (English, expressive, streaming) instead of Irodori.
+    SILK_API_KEY: str | None = os.getenv("SILK_API_KEY")
+    SILK_API_URL: str = os.getenv("SILK_API_URL", "https://silk-api.rumik.ai")
+    SILK_MODEL: str = os.getenv("SILK_MODEL", "mulberry")
+    SILK_TIMEOUT: float = float(os.getenv("SILK_TIMEOUT", "60"))
     models: Models = field(default_factory=Models)
 
 

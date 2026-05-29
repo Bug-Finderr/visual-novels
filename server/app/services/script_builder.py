@@ -5,13 +5,25 @@ from typing import Any
 from app.db.database import db
 
 
+# Sentinel that marks choice-target labels (the body of every `jump <label>`
+# entry inside a Choice). The runtime never actually walks these labels —
+# clicking a choice fires the API call which replaces the current label —
+# so any content is purely defensive. Keeping it as a SENTINEL lets the TTS
+# / backfill paths recognize and skip it instead of treating it as narration.
+CHOICE_TARGET_SENTINEL = "__choice_target_placeholder__"
+
+
 def _convert_single(stmt: dict) -> Any:
     t = stmt.get("type")
     if t == "narration":
         return stmt.get("text", "")
     if t == "dialogue":
         expr = stmt.get("expression") or "neutral"
-        return f"{stmt['speaker']}:{expr} {stmt.get('text', '')}"
+        # Gemini sometimes emits a null speaker when the protagonist is speaking
+        # (against our prompt rule). Fall back to the "player" pseudo-id which
+        # the frontend maps to the configured protagonist name.
+        speaker = stmt.get("speaker") or "player"
+        return f"{speaker}:{expr} {stmt.get('text', '')}"
     if t == "scene_change":
         return f"show scene {stmt['sceneId']} with fadeIn"
     if t == "show_character":
@@ -32,8 +44,12 @@ def _build_choice_statement(choices: list[dict], parent_label: str) -> tuple[dic
             "Text": choice["text"],
             "Do": f"jump {label_name}",
             "_consequence": choice.get("consequence", ""),
+            # Alignment metadata flows to the client so it can be echoed back
+            # in the /choice request and applied to alignment_state server-side.
+            "_alignmentTag": choice.get("alignmentTag", ""),
+            "_magnitude": int(choice.get("magnitude") or 1),
         }
-        choice_labels[label_name] = ["Waiting for AI to continue the story..."]
+        choice_labels[label_name] = [CHOICE_TARGET_SENTINEL]
     return choice_obj, choice_labels
 
 
@@ -54,10 +70,23 @@ def _convert_statement_array(stmt_array: list[dict], parent_label: str) -> tuple
 
 
 def build_initial_script(story_data: dict) -> dict:
+    """Convert the openingScript into the 'Start' label AND append beat 0's
+    pre-baked choices so the player gets agency at the end of the opening
+    without an extra /advance LLM round-trip. The first /choice click then
+    fetches beat 1 from the cache instantly.
+    """
     script: dict = {}
     start_statements, extra_labels = _convert_statement_array(
         story_data["openingScript"], "Start"
     )
+
+    spine = story_data.get("storySpine") or []
+    beat0_choices = (spine[0].get("choices") if spine else None) or []
+    if beat0_choices:
+        choice_stmt, choice_labels = _build_choice_statement(beat0_choices, "Start")
+        start_statements.append(choice_stmt)
+        extra_labels.update(choice_labels)
+
     script["Start"] = start_statements
     script.update(extra_labels)
     return script
