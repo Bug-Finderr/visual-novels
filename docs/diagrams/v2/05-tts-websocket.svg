@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="cardGrad5" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1c160e"/>
+      <stop offset="100%" stop-color="#14110b"/>
+    </linearGradient>
+    <marker id="arrowTTS" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d4a857"/>
+    </marker>
+    <marker id="arrowPCM" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c4663a"/>
+    </marker>
+    <marker id="arrowCache" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#91a87a"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#07060a"/>
+  <ellipse cx="640" cy="-100" rx="900" ry="350" fill="#1c1207" opacity="0.55"/>
+
+  <text x="60" y="62" font-family="Cormorant Garamond, serif" font-size="34" fill="#f3e7cf">Silk Mulberry TTS — WebSocket flow</text>
+  <line x1="62" y1="80" x2="380" y2="80" stroke="#c4663a" stroke-width="1.5"/>
+  <text x="60" y="105" font-family="Cormorant Garamond, serif" font-size="17" font-style="italic" fill="#ebc473">PCM streams as it's synthesized — playback starts on the FIRST chunk.</text>
+
+  <!-- Browser -->
+  <g>
+    <rect x="60" y="180" width="280" height="430" rx="16" fill="url(#cardGrad5)" stroke="#d4a857" stroke-width="1.2"/>
+    <text x="200" y="220" text-anchor="middle" font-family="Cormorant Garamond, serif" font-size="22" font-style="italic" fill="#ebc473">Browser</text>
+    <line x1="100" y1="234" x2="300" y2="234" stroke="#d4a857" stroke-opacity="0.35"/>
+
+    <text x="80" y="275" font-size="13" fill="#f3e7cf">StreamingVoicePlayer</text>
+    <text x="80" y="295" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">new WebSocket(...)</text>
+
+    <text x="80" y="345" font-size="13" fill="#f3e7cf">Per chunk:</text>
+    <text x="80" y="365" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">Int16Array → Float32</text>
+    <text x="80" y="385" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">ctx.createBuffer(...)</text>
+    <text x="80" y="405" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">src.start(playAt)</text>
+    <text x="80" y="425" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">playAt += duration</text>
+
+    <text x="80" y="475" font-size="13" fill="#f3e7cf">Graph:</text>
+    <text x="80" y="498" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">Source → Gain →</text>
+    <text x="80" y="516" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  Analyser → Destination</text>
+
+    <text x="80" y="558" font-size="12" font-style="italic" fill="#ebc473">AnalyserNode drives</text>
+    <text x="80" y="578" font-size="12" font-style="italic" fill="#ebc473">amplitude lip-sync</text>
+  </g>
+
+  <!-- WS arrow → server -->
+  <line x1="340" y1="290" x2="490" y2="290" stroke="#d4a857" stroke-width="1.5" marker-end="url(#arrowTTS)"/>
+  <text x="412" y="278" text-anchor="middle" font-size="12" font-family="JetBrains Mono, monospace" fill="#ebc473">WS /tts/stream</text>
+  <text x="412" y="306" text-anchor="middle" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">{scriptString, text, characterId, expression}</text>
+
+  <!-- PCM arrows back -->
+  <line x1="490" y1="380" x2="340" y2="400" stroke="#c4663a" stroke-width="1.5" marker-end="url(#arrowPCM)"/>
+  <line x1="490" y1="410" x2="340" y2="430" stroke="#c4663a" stroke-width="1.5" marker-end="url(#arrowPCM)"/>
+  <line x1="490" y1="440" x2="340" y2="460" stroke="#c4663a" stroke-width="1.5" marker-end="url(#arrowPCM)"/>
+  <text x="412" y="380" text-anchor="middle" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4663a">PCM chunks (int16 LE @ 24 kHz)</text>
+
+  <!-- Server -->
+  <g>
+    <rect x="490" y="180" width="320" height="430" rx="16" fill="url(#cardGrad5)" stroke="#d4a857" stroke-width="1.4"/>
+    <text x="650" y="220" text-anchor="middle" font-family="Cormorant Garamond, serif" font-size="22" font-style="italic" fill="#ebc473">FastAPI tts_stream</text>
+    <line x1="530" y1="234" x2="770" y2="234" stroke="#d4a857" stroke-opacity="0.35"/>
+
+    <!-- decision diamond -->
+    <text x="510" y="265" font-size="13" fill="#f3e7cf">_resolve_profile(characterId)</text>
+    <text x="510" y="285" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">→ voice_caption + gender</text>
+
+    <text x="510" y="318" font-size="13" font-weight="600" fill="#ebc473">if audio/&lt;sha1&gt;.wav exists:</text>
+    <text x="510" y="340" font-size="11" font-family="JetBrains Mono, monospace" fill="#91a87a">  read WAV, stream PCM payload</text>
+    <text x="510" y="358" font-size="11" font-family="JetBrains Mono, monospace" fill="#91a87a">  in 100 ms chunks</text>
+
+    <text x="510" y="395" font-size="13" font-weight="600" fill="#ebc473">else (cache miss):</text>
+    <text x="510" y="417" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  POST /v1/tts/ws-connect</text>
+    <text x="510" y="435" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  open WS w/ ?token=...</text>
+    <text x="510" y="453" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  send {text, description,</text>
+    <text x="510" y="471" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">         speaker, f0_up_key}</text>
+    <text x="510" y="491" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  forward each PCM frame</text>
+    <text x="510" y="509" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  to browser AS IT ARRIVES</text>
+
+    <text x="510" y="545" font-size="12" font-style="italic" fill="#ebc473">on {type:done}:</text>
+    <text x="510" y="565" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  write WAV to disk</text>
+    <text x="510" y="583" font-size="11" font-family="JetBrains Mono, monospace" fill="#c4b08a">  update manifest.json</text>
+  </g>
+
+  <!-- arrows to disk cache -->
+  <line x1="810" y1="335" x2="950" y2="285" stroke="#91a87a" stroke-width="1.5" marker-end="url(#arrowCache)"/>
+  <line x1="810" y1="555" x2="950" y2="425" stroke="#91a87a" stroke-width="1.5" marker-end="url(#arrowCache)"/>
+
+  <!-- Disk WAV cache -->
+  <g>
+    <rect x="950" y="240" width="270" height="120" rx="14" fill="url(#cardGrad5)" stroke="#91a87a" stroke-width="1.2"/>
+    <text x="1085" y="275" text-anchor="middle" font-family="Cormorant Garamond, serif" font-size="20" font-style="italic" fill="#91a87a">WAV cache</text>
+    <text x="970" y="305" font-size="12" font-family="JetBrains Mono, monospace" fill="#c4b08a">data/generated/&lt;sid&gt;/</text>
+    <text x="970" y="323" font-size="12" font-family="JetBrains Mono, monospace" fill="#c4b08a">  audio/&lt;sha1&gt;.wav</text>
+    <text x="970" y="341" font-size="12" font-family="JetBrains Mono, monospace" fill="#c4b08a">  audio/manifest.json</text>
+  </g>
+
+  <!-- Mulberry external -->
+  <line x1="810" y1="445" x2="950" y2="445" stroke="#c4663a" stroke-width="1.6" marker-end="url(#arrowPCM)"/>
+  <line x1="950" y1="475" x2="810" y2="475" stroke="#c4663a" stroke-width="1.6" marker-end="url(#arrowPCM)" transform="translate(0,0)"/>
+  <g>
+    <rect x="950" y="410" width="270" height="120" rx="14" fill="url(#cardGrad5)" stroke="#c4663a" stroke-width="1.4"/>
+    <text x="1085" y="445" text-anchor="middle" font-family="Cormorant Garamond, serif" font-size="20" font-style="italic" fill="#ebc473">Silk Mulberry WS</text>
+    <text x="970" y="475" font-size="12" font-family="JetBrains Mono, monospace" fill="#c4b08a">rumik.ai — in-house engine</text>
+    <text x="970" y="495" font-size="12" font-family="JetBrains Mono, monospace" fill="#c4b08a">int16 LE PCM @ 24 kHz mono</text>
+    <text x="970" y="515" font-size="12" font-family="JetBrains Mono, monospace" fill="#c4b08a">{type:done} terminator</text>
+  </g>
+
+  <text x="60" y="700" font-size="12" font-style="italic" fill="#8c7a5b">Pre-pipeline pre-renders every line; subsequent plays are pure disk reads streamed back as PCM.</text>
+</svg>

@@ -15,6 +15,7 @@ from pptx.util import Inches, Pt
 DOCS = Path(__file__).resolve().parent
 OUT = DOCS / "output" / "storyplex-v2.pptx"
 OUT.parent.mkdir(parents=True, exist_ok=True)
+DIAG = DOCS / "diagrams" / "v2" / "png"
 
 # Candlelit palette — same vibe as the new UI
 BG       = RGBColor(0x07, 0x06, 0x0A)
@@ -115,7 +116,18 @@ def header(slide, title, subtitle=None):
         )
 
 
-def page_no(slide, n, total):
+_PAGE_STATE = {"current": 0}
+
+
+def page_no(slide, n=None, total=None):
+    """Auto-incrementing page label. Pass nothing — the next slide just calls
+    `page_no(s)` and the counter ticks. Total is filled in from the global
+    TOTAL constant at render time so we never need to hand-renumber."""
+    if n is None:
+        _PAGE_STATE["current"] += 1
+        n = _PAGE_STATE["current"]
+    if total is None:
+        total = TOTAL
     text_box(
         slide, Inches(12.3), Inches(7.05), Inches(1.0), Inches(0.3),
         [{"text": f"{n} / {total}", "font": MONO, "size": 9, "color": DIM}],
@@ -205,12 +217,23 @@ def table_block(slide, x, y, w, h, rows, *, col_widths=None, header_color=GOLD_B
             fill(div, RGBColor(0x57, 0x49, 0x2D))
 
 
+def diagram_slide(slide, png_filename, *, top=Inches(1.85), height=Inches(5.35)):
+    """Center a PNG diagram horizontally on a slide below the header."""
+    path = DIAG / png_filename
+    if not path.exists():
+        raise SystemExit(f"missing diagram: {path}")
+    # cairosvg writes 1920×1080 (16:9). Fit to slide width minus margins.
+    w = Inches(12)
+    x = (SLIDE_W - w) // 2
+    slide.shapes.add_picture(str(path), x, top, width=w, height=height)
+
+
 # =====================================================================
 # Slides
 # =====================================================================
 
 prs = make_prs()
-TOTAL = 17  # update if we add/remove
+TOTAL = 25  # 19 text slides + 6 diagram slides
 
 
 def add_title():
@@ -224,12 +247,54 @@ def add_title():
                "font": SERIF, "size": 84, "color": INK}])
     ornament(s, Inches(0.75), Inches(4.7), Inches(2.4))
     text_box(s, Inches(0.7), Inches(4.85), Inches(12), Inches(1.0),
-             [{"text": "Pre-generated stories, instant playback.",
+             [{"text": "Pre-compiled stories, in-house voices.",
                "font": SERIF, "size": 28, "italic": True, "color": MUTED}])
     text_box(s, Inches(0.7), Inches(5.65), Inches(12), Inches(0.5),
              [{"text": "A snapshot of the recent architecture refactor.",
                "font": SANS, "size": 16, "color": DIM}])
-    page_no(s, 1, TOTAL)
+    page_no(s)
+
+
+def add_headline_features():
+    """Banner slide highlighting the two headline v2 features."""
+    s = blank(prs); set_bg(s)
+    header(s, "Headline features in v2",
+           "Two things that change the whole shape of the product")
+
+    # Left card — Pre-compiled story
+    card(s, Inches(0.75), Inches(2.2), Inches(5.85), Inches(4.5))
+    text_box(s, Inches(1.0), Inches(2.35), Inches(5.4), Inches(0.5),
+             [{"text": "NEW",
+               "font": SANS, "size": 11, "bold": True, "color": EMBER}])
+    text_box(s, Inches(1.0), Inches(2.7), Inches(5.4), Inches(0.8),
+             [{"text": "Pre-compiled story",
+               "font": SERIF, "size": 32, "color": GOLD_BR}])
+    ornament(s, Inches(1.0), Inches(3.55), Inches(1.4))
+    bullet_block(s, Inches(1.0), Inches(3.75), Inches(5.4), Inches(2.8),
+                 [
+                     "World + all 10 beat dialogues + all 5 endings + every TTS line "
+                     "baked into the cache BEFORE the player starts.",
+                     "Runtime is a deterministic DB lookup — <100 ms per page.",
+                     "No spinner between choices. No 'characters are responding' delay.",
+                 ], size=13)
+
+    # Right card — In-house TTS
+    card(s, Inches(6.85), Inches(2.2), Inches(5.7), Inches(4.5))
+    text_box(s, Inches(7.1), Inches(2.35), Inches(5.4), Inches(0.5),
+             [{"text": "NEW",
+               "font": SANS, "size": 11, "bold": True, "color": EMBER}])
+    text_box(s, Inches(7.1), Inches(2.7), Inches(5.2), Inches(0.8),
+             [{"text": "In-house TTS — Silk Mulberry",
+               "font": SERIF, "size": 28, "color": GOLD_BR}])
+    ornament(s, Inches(7.1), Inches(3.55), Inches(1.4))
+    bullet_block(s, Inches(7.1), Inches(3.75), Inches(5.2), Inches(2.8),
+                 [
+                     "Our own expressive English voice engine — built in-house.",
+                     "WebSocket streaming: PCM arrives as it's synthesized.",
+                     "Stable per-character description + per-line emotion delta — "
+                     "consistent identity across every line.",
+                 ], size=13)
+    page_no(s)
 
 
 def add_problem():
@@ -247,7 +312,7 @@ def add_problem():
     text_box(s, Inches(1.1), Inches(5.65), Inches(11.0), Inches(1.0),
              [{"text": "“User don’t feel the wait and lag.”",
                "font": SERIF, "size": 26, "italic": True, "color": GOLD_BR}])
-    page_no(s, 2, TOTAL)
+    page_no(s)
 
 
 def add_shift():
@@ -266,7 +331,7 @@ def add_shift():
     text_box(s, Inches(0.75), Inches(6.85), Inches(11.8), Inches(0.4),
              [{"text": "Free-input is the only thing that still calls Gemini at runtime.",
                "font": SERIF, "size": 16, "italic": True, "color": MUTED}])
-    page_no(s, 3, TOTAL)
+    page_no(s)
 
 
 def add_story_shape():
@@ -286,7 +351,7 @@ def add_story_shape():
               {"text": "",  "size": 6},
               {"text": "Most players see the same dialogue. Their choices route them to one of 5 distinct epilogues.",
                "font": SANS, "size": 14, "color": MUTED}])
-    page_no(s, 4, TOTAL)
+    page_no(s)
 
 
 def add_spine_flow():
@@ -306,7 +371,7 @@ def add_spine_flow():
                      "Every choice routes to the SAME next beat — only the ending changes.",
                      "_ensure_scene_change + _ensure_cast keep the stage clean across beats.",
                  ], size=14)
-    page_no(s, 5, TOTAL)
+    page_no(s)
 
 
 def add_pipeline():
@@ -326,7 +391,7 @@ def add_pipeline():
     text_box(s, Inches(0.75), Inches(6.85), Inches(11.8), Inches(0.4),
              [{"text": "Total: ~3.5–5 min. After that — zero waits during play.",
                "font": SERIF, "size": 16, "italic": True, "color": GOLD_BR}])
-    page_no(s, 6, TOTAL)
+    page_no(s)
 
 
 def add_caches():
@@ -346,7 +411,7 @@ def add_caches():
     text_box(s, Inches(0.75), Inches(6.85), Inches(11.8), Inches(0.4),
              [{"text": "Plus on-disk: sprites, backgrounds, overlays, <sha1>.wav audio.",
                "font": SANS, "size": 14, "color": MUTED}])
-    page_no(s, 7, TOTAL)
+    page_no(s)
 
 
 def add_runtime():
@@ -367,7 +432,7 @@ def add_runtime():
             ▼
    200 OK in <100 ms""",
                 size=14)
-    page_no(s, 8, TOTAL)
+    page_no(s)
 
 
 def add_tts():
@@ -383,7 +448,43 @@ def add_tts():
                      "Client decodes int16 LE @ 24 kHz, schedules each BufferSource on the first chunk.",
                      "AnalyserNode drives amplitude-based lip-sync.",
                  ], size=15)
-    page_no(s, 9, TOTAL)
+    page_no(s)
+
+
+def add_silk_mulberry():
+    """Dedicated headline slide for the in-house TTS engine."""
+    s = blank(prs); set_bg(s)
+    header(s, "Silk Mulberry — our in-house TTS",
+           "Built in-house, streamed over WebSocket, voiced per character")
+
+    # Left: what it is
+    card(s, Inches(0.75), Inches(2.2), Inches(5.9), Inches(4.5))
+    text_box(s, Inches(1.0), Inches(2.4), Inches(5.5), Inches(0.5),
+             [{"text": "What it is",
+               "font": SERIF, "size": 22, "italic": True, "color": GOLD_BR}])
+    ornament(s, Inches(1.0), Inches(2.95), Inches(1.2))
+    bullet_block(s, Inches(1.0), Inches(3.15), Inches(5.5), Inches(3.4),
+                 [
+                     "Custom expressive English voice model — built in-house.",
+                     "POST /v1/tts/ws-connect mints a one-shot WS session.",
+                     "Server forwards each PCM frame to the browser AS IT ARRIVES.",
+                     "First-byte latency: <500 ms after the click.",
+                 ], size=13)
+
+    # Right: voice routing
+    card(s, Inches(6.75), Inches(2.2), Inches(5.8), Inches(4.5))
+    text_box(s, Inches(7.0), Inches(2.4), Inches(5.4), Inches(0.5),
+             [{"text": "How a voice is built",
+               "font": SERIF, "size": 22, "italic": True, "color": GOLD_BR}])
+    ornament(s, Inches(7.0), Inches(2.95), Inches(1.2))
+    bullet_block(s, Inches(7.0), Inches(3.15), Inches(5.4), Inches(3.4),
+                 [
+                     ("base", "per-character voice_caption (stable across every line)"),
+                     ("+ delta", "per-line emotion/pacing hint from the expression tag"),
+                     ("speaker", "speaker_1 preset for females; description-driven for males"),
+                     ("pitch", "f0_up_key shifted by age + gender"),
+                 ], size=13)
+    page_no(s)
 
 
 def add_voice_default():
@@ -407,7 +508,7 @@ def add_voice_default():
                     ["angry",  "Speak sharply and with bite, faster paced."],
                 ],
                 col_widths=[Inches(2.5), Inches(9.3)])
-    page_no(s, 10, TOTAL)
+    page_no(s)
 
 
 def add_voice_routing():
@@ -424,7 +525,7 @@ def add_voice_routing():
                "font": SANS, "size": 14, "color": INK},
               {"text": "Legacy sessions fall back to keyword detection over voice_caption.",
                "font": SANS, "size": 14, "color": MUTED}])
-    page_no(s, 11, TOTAL)
+    page_no(s)
 
 
 def add_guards():
@@ -452,7 +553,7 @@ def add_guards():
                      "stops prior-beat sprites from lingering",
                      "safe to over-hide — client no-ops it",
                  ], size=13)
-    page_no(s, 12, TOTAL)
+    page_no(s)
 
 
 def add_save_restart():
@@ -469,7 +570,7 @@ def add_save_restart():
                     ["Restart", "Reset alignment + beat. Drop runtime labels. KEEP beat & ending caches so replay is instant."],
                 ],
                 col_widths=[Inches(2.0), Inches(9.8)])
-    page_no(s, 13, TOTAL)
+    page_no(s)
 
 
 def add_continue():
@@ -489,7 +590,7 @@ Chapter 2  (new session)
     text_box(s, Inches(0.75), Inches(6.0), Inches(11.8), Inches(1.2),
              [{"text": "build_continuation_prompt forces re-use of character ids and picks up after the parent's chosen ending.",
                "font": SANS, "size": 14, "color": INK}])
-    page_no(s, 14, TOTAL)
+    page_no(s)
 
 
 def add_ui():
@@ -504,7 +605,7 @@ def add_ui():
                      "Per-view refresh: landing, setup wizard, sessions, loading, pause menu.",
                      "Dialogue box gets a soft gold gradient top edge; choice buttons get a gold left bar on hover.",
                  ], size=15)
-    page_no(s, 15, TOTAL)
+    page_no(s)
 
 
 def add_deploy():
@@ -523,7 +624,7 @@ def add_deploy():
                      "Render Starter ($7/mo) with persistent disk handles SQLite + the data/generated/ tree.",
                      "Single-user / dev usage: under $10/mo for hosting. Gemini calls dominate variable cost.",
                  ], size=14)
-    page_no(s, 16, TOTAL)
+    page_no(s)
 
 
 def add_closing():
@@ -543,15 +644,75 @@ def add_closing():
                      "Wire env vars + production CORS.",
                      "Smoke-test fresh-session → play → save → continue.",
                  ], size=17)
-    page_no(s, 17, TOTAL)
+    page_no(s)
 
 
-# Build
+# ---------------------- diagram slides --------------------------------
+
+def add_diagram_system():
+    s = blank(prs); set_bg(s)
+    header(s, "System architecture",
+           "Browser ↔ FastAPI ↔ Gemini · Mulberry · SQLite · disk")
+    diagram_slide(s, "01-system-architecture.png")
+    page_no(s)
+
+
+def add_diagram_spine():
+    s = blank(prs); set_bg(s)
+    header(s, "Story spine — at a glance",
+           "10 beats, 3 choices each, 5 candidate endings")
+    diagram_slide(s, "03-spine-flow.png")
+    page_no(s)
+
+
+def add_diagram_pipeline():
+    s = blank(prs); set_bg(s)
+    header(s, "Generation pipeline — visual",
+           "6 phases. Most run in parallel.")
+    diagram_slide(s, "02-pipeline-phases.png")
+    page_no(s)
+
+
+def add_diagram_runtime():
+    s = blank(prs); set_bg(s)
+    header(s, "Runtime cache flow",
+           "Choice click → DB lookup → 200 OK in <100 ms")
+    diagram_slide(s, "04-runtime-cache-flow.png")
+    page_no(s)
+
+
+def add_diagram_tts():
+    s = blank(prs); set_bg(s)
+    header(s, "Silk Mulberry — WebSocket flow",
+           "Cache-first, live-stream on miss, write WAV on done")
+    diagram_slide(s, "05-tts-websocket.png")
+    page_no(s)
+
+
+def add_diagram_chapter():
+    s = blank(prs); set_bg(s)
+    header(s, "Chapter continuation",
+           "Child session inherits world + cast; gets new spine + endings")
+    diagram_slide(s, "06-chapter-continuation.png")
+    page_no(s)
+
+
+# Build — order: each text slide is followed by its supporting diagram
+# (diagrams appear AFTER the slide that introduces the concept).
 for builder in (
-    add_title, add_problem, add_shift, add_story_shape, add_spine_flow,
-    add_pipeline, add_caches, add_runtime, add_tts,
+    add_title, add_headline_features,
+    add_problem, add_diagram_system,
+    add_shift,
+    add_story_shape, add_diagram_spine,
+    add_spine_flow,
+    add_pipeline, add_diagram_pipeline,
+    add_caches,
+    add_runtime, add_diagram_runtime,
+    add_tts, add_silk_mulberry, add_diagram_tts,
     add_voice_default, add_voice_routing, add_guards,
-    add_save_restart, add_continue, add_ui, add_deploy, add_closing,
+    add_save_restart,
+    add_continue, add_diagram_chapter,
+    add_ui, add_deploy, add_closing,
 ):
     builder()
 
