@@ -85,13 +85,17 @@ CREATE TABLE IF NOT EXISTS dialogue_history (
 );
 
 -- Pre-generated full-beat expansions so runtime page-advances hit the cache
--- instead of an LLM call. Keyed (session_id, beat_index). Wiped on restart.
+-- instead of an LLM call. Three variants per beat keyed by the alignmentTag
+-- of the choice the player took in the *previous* beat — so each choice
+-- produces a genuinely different next-beat. Empty string '' is the default
+-- variant (used for /advance fallback + cache-miss recovery).
 CREATE TABLE IF NOT EXISTS beat_expansions (
-  session_id   TEXT NOT NULL,
-  beat_index   INTEGER NOT NULL,
-  statements   TEXT NOT NULL,
-  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (session_id, beat_index),
+  session_id          TEXT NOT NULL,
+  beat_index          INTEGER NOT NULL,
+  source_choice_tag   TEXT NOT NULL DEFAULT '',
+  statements          TEXT NOT NULL,
+  created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (session_id, beat_index, source_choice_tag),
   FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
@@ -181,6 +185,27 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE sessions ADD COLUMN parent_session_id TEXT")
     if "chapter_number" not in sess_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN chapter_number INTEGER DEFAULT 1")
+
+    # Branching beat cache — if an older session has the single-variant
+    # schema (no source_choice_tag column), drop the cache table so the
+    # CREATE TABLE IF NOT EXISTS above rebuilds it with the new PK shape.
+    # The cached beats are regenerable by the pipeline so this is safe.
+    be_cols = {row[1] for row in conn.execute("PRAGMA table_info(beat_expansions)").fetchall()}
+    if be_cols and "source_choice_tag" not in be_cols:
+        logger.info("Migrating beat_expansions to per-choice variants (dropping single-variant cache)")
+        conn.execute("DROP TABLE beat_expansions")
+        # Recreate immediately so the rest of the connection lifecycle sees it.
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS beat_expansions (
+              session_id          TEXT NOT NULL,
+              beat_index          INTEGER NOT NULL,
+              source_choice_tag   TEXT NOT NULL DEFAULT '',
+              statements          TEXT NOT NULL,
+              created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (session_id, beat_index, source_choice_tag),
+              FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            );
+        """)
 
 
 @contextmanager
