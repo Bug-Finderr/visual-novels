@@ -1,6 +1,13 @@
 import { navigate } from '../utils/router.js';
 import { api } from '../services/api.js';
 
+const EPIGRAPHS = [
+  'In the beginning was the word…',
+  'A story is the shortest distance between two souls.',
+  'Every world is born from a single thought.',
+  'Patience — the ink is still drying.',
+];
+
 export function renderLoading(container, params) {
   const sessionId = params[0];
   if (!sessionId) {
@@ -8,26 +15,35 @@ export function renderLoading(container, params) {
     return;
   }
 
+  const epigraph = EPIGRAPHS[Math.floor(Math.random() * EPIGRAPHS.length)];
+
   container.innerHTML = `
     <div class="loading-view">
-      <h2>Generating Your Story</h2>
-      <p class="loading-subtitle">This may take a few minutes as we create your world, characters, and artwork.</p>
+      <div class="loading-card">
+        <div class="ornament">Weaving</div>
+        <h1 class="display-title">Weaving your world</h1>
+        <p class="loading-subtitle">&ldquo;${epigraph}&rdquo;</p>
 
-      <div class="progress-container">
-        <div class="progress-bar">
-          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+          </div>
+          <div class="progress-meta">
+            <span class="progress-text" id="progress-text">Connecting…</span>
+            <span class="progress-percent" id="progress-percent">0</span>
+          </div>
         </div>
-        <div class="progress-text" id="progress-text">Connecting...</div>
-        <div class="progress-percent" id="progress-percent">0%</div>
+
+        <div class="progress-steps" id="progress-steps"></div>
+
+        <div id="loading-actions" style="display:none;">
+          <button class="btn btn-primary btn-lg" id="btn-start-game">
+            <span class="btn-icon">&#9656;</span> Begin the tale
+          </button>
+        </div>
+
+        <div id="loading-error" class="error-message" style="display:none;"></div>
       </div>
-
-      <div class="progress-steps" id="progress-steps"></div>
-
-      <div id="loading-actions" style="display:none;">
-        <button class="btn btn-primary btn-lg" id="btn-start-game">Start Your Story</button>
-      </div>
-
-      <div id="loading-error" class="error-message" style="display:none;"></div>
     </div>
   `;
 
@@ -50,12 +66,11 @@ export function renderLoading(container, params) {
     }
   }
 
-  // Connect to SSE for progress
   const source = api.sse(
     `/sessions/${sessionId}/generate/status`,
     (data) => {
       fillEl.style.width = `${data.progress}%`;
-      percentEl.textContent = `${data.progress}%`;
+      percentEl.textContent = `${data.progress}`;
       textEl.textContent = data.details;
       addStep(data.details);
 
@@ -71,12 +86,11 @@ export function renderLoading(container, params) {
       }
     },
     () => {
-      // SSE error — check session status
       api.get(`/sessions/${sessionId}`).then((session) => {
         if (session.status === 'ready') {
           fillEl.style.width = '100%';
-          percentEl.textContent = '100%';
-          textEl.textContent = 'Generation complete!';
+          percentEl.textContent = '100';
+          textEl.textContent = 'Generation complete.';
           actionsEl.style.display = 'block';
         } else if (session.status === 'error') {
           errorEl.textContent = 'Generation failed. Try again.';

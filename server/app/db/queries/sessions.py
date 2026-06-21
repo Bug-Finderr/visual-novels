@@ -1,0 +1,160 @@
+import json
+
+from app.db.database import db, row_to_dict, rows_to_list
+
+_ALLOWED_PATCH_FIELDS = {"title", "status", "current_scene_id", "current_label"}
+
+
+def save_spine(
+    session_id: str,
+    *,
+    story_spine: list,
+    endings: list,
+) -> None:
+    """Persist the pre-generated story spine + ending catalogue.
+    alignment_state is seeded with 0 for every ending id so the dialogue engine
+    can simply add weights without first-touch initialization.
+    """
+    seed = {e["id"]: 0 for e in endings if e.get("id")}
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE sessions
+            SET story_spine = ?, endings = ?, alignment_state = ?,
+                current_beat_index = 0, chosen_ending_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (json.dumps(story_spine), json.dumps(endings),
+             json.dumps(seed), session_id),
+        )
+
+
+def update_alignment(session_id: str, alignment_state: dict) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET alignment_state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps(alignment_state), session_id),
+        )
+
+
+def advance_beat(session_id: str, new_index: int) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET current_beat_index = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_index, session_id),
+        )
+
+
+def set_chosen_ending(session_id: str, ending_id: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET chosen_ending_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (ending_id, session_id),
+        )
+
+
+def create(session: dict) -> None:
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO sessions (id, title, status, setup_genre, setup_art_style, setup_setting,
+                setup_protagonist_name, setup_protagonist_personality, setup_tone, setup_premise)
+            VALUES (:id, :title, :status, :setup_genre, :setup_art_style, :setup_setting,
+                :setup_protagonist_name, :setup_protagonist_personality, :setup_tone, :setup_premise)
+            """,
+            session,
+        )
+
+
+def set_chapter_parent(session_id: str, parent_id: str, chapter_number: int) -> None:
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE sessions
+            SET parent_session_id = ?, chapter_number = ?
+            WHERE id = ?
+            """,
+            (parent_id, chapter_number, session_id),
+        )
+
+
+def get_all() -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
+              created_at, updated_at, last_played_at,
+              parent_session_id, chapter_number
+            FROM sessions ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def get_by_id(session_id: str) -> dict | None:
+    with db() as conn:
+        row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    return row_to_dict(row)
+
+
+def update_status(session_id: str, status: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, session_id),
+        )
+
+
+def save_story_data(session_id: str, world_lore, plot_arc) -> None:
+    with db() as conn:
+        conn.execute(
+            """
+            UPDATE sessions
+            SET world_lore = ?, plot_arc = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (json.dumps(world_lore), json.dumps(plot_arc), session_id),
+        )
+
+
+def update_current_scene(session_id: str, scene_id: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET current_scene_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (scene_id, session_id),
+        )
+
+
+def update_current_label(session_id: str, label: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET current_label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (label, session_id),
+        )
+
+
+def update_last_played(session_id: str) -> None:
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET last_played_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (session_id,),
+        )
+
+
+def delete(session_id: str) -> None:
+    with db() as conn:
+        conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+
+def patch(session_id: str, fields: dict) -> None:
+    updates = {k: v for k, v in fields.items() if k in _ALLOWED_PATCH_FIELDS}
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    params = {**updates, "id": session_id}
+    with db() as conn:
+        conn.execute(
+            f"UPDATE sessions SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = :id",
+            params,
+        )

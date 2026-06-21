@@ -5,3 +5,17 @@ server/data/
 *.db
 *.db-journal
 .claude
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*.docx
+*.pptx

@@ -9,6 +9,9 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        // Required so /api/sessions/{id}/tts/stream (WebSocket) tunnels
+        // through to the FastAPI backend in dev.
+        ws: true,
       },
       '/game-assets': {
         target: 'http://localhost:3001',

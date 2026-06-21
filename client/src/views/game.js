@@ -12,8 +12,9 @@ export async function renderGame(container, params) {
   container.innerHTML = `
     <div class="game-view">
       <div class="game-header">
-        <button class="btn btn-ghost" id="btn-back-to-menu">&larr; Menu</button>
-        <span class="game-title" id="game-title">Loading...</span>
+        <button class="btn btn-ghost" id="btn-back-to-menu">&larr; Library</button>
+        <span class="game-title" id="game-title">Loading…</span>
+        <button class="btn btn-ghost" id="btn-pause" title="Pause (Esc)">&#9776; Menu</button>
       </div>
       <div class="game-container" id="game-container">
         <div class="game-canvas" id="game-canvas">
@@ -35,7 +36,7 @@ export async function renderGame(container, params) {
             <div class="thinking-indicator">
               <span></span><span></span><span></span>
             </div>
-            <p>Characters are responding...</p>
+            <p>The next page is being written…</p>
           </div>
         </div>
       </div>
@@ -44,6 +45,9 @@ export async function renderGame(container, params) {
 
   container.querySelector('#btn-back-to-menu').addEventListener('click', () => {
     navigate('/');
+  });
+  container.querySelector('#btn-pause').addEventListener('click', () => {
+    gameBridge.togglePauseMenu();
   });
 
   try {
@@ -56,6 +60,11 @@ export async function renderGame(container, params) {
     ]);
 
     container.querySelector('#game-title').textContent = session.title;
+
+    // Asset cache buster — keyed on session updated_at. When the backend
+    // regenerates frames in place (retrofit / new dynamic char), the URL
+    // string changes and the immutable HTTP cache is bypassed naturally.
+    window.STORYPLEX_ASSET_VERSION = (session.updated_at || '').replace(/\D/g, '');
 
     // Initialize the game bridge (our custom VN engine instead of raw Monogatari)
     gameBridge.init({
