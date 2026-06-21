@@ -107,13 +107,16 @@ def build_beat_full_prompt(
     session: dict,
     current_beat: dict,
     next_beat: dict | None,
+    previous_choice_text: str | None = None,
+    previous_choice_tag: str | None = None,
 ) -> str:
     """Pre-render variant: produces the entire beat in one response (6-12
     statements) so it can be cached and replayed at runtime instantly.
 
-    No conversation history is consumed — beat content is self-contained
-    and the system prompt carries the spine context. The user message is a
-    generic '[PRE-RENDER]' marker.
+    `previous_choice_text` / `previous_choice_tag` describe the choice the
+    player took at the END of the previous beat. The first 1-2 statements
+    of this beat must REACT to that choice so the player feels their
+    decision shaped the next scene. Pass None for the opening / no source.
     """
     characters = session.get("characters") or []
     current_scene = session.get("currentScene")
@@ -139,6 +142,18 @@ def build_beat_full_prompt(
         if next_beat else ""
     )
 
+    prev_choice_block = ""
+    if previous_choice_text:
+        prev_choice_block = f"""
+
+PLAYER JUST CHOSE (in the previous beat): "{previous_choice_text.strip()}"
+  alignment tag: {previous_choice_tag or '(unknown)'}
+
+The FIRST 1–2 statements of this beat MUST openly react to that choice —
+characters mention it, narration calls back to it, the world responds.
+The rest of the beat follows the outline below. Do not contradict the
+choice or pretend it didn't happen."""
+
     return f"""You write the complete dialogue + sprite directives for ONE beat of an
 interactive visual novel, in a single response. Characters and scenes are
 locked — they were generated upfront and you must only reference existing ids.
@@ -153,7 +168,7 @@ CHARACTERS IN THIS BEAT:
 
 THIS BEAT ({current_beat.get('index', 0) + 1}/10): {current_beat.get('title','')}
 goal:    {current_beat.get('narrativeGoal','')}
-outline: {current_beat.get('outline','')}{next_block}
+outline: {current_beat.get('outline','')}{next_block}{prev_choice_block}
 
 OUTPUT — strict JSON:
 {{

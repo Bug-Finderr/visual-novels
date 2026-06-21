@@ -195,7 +195,10 @@ def _run_pipeline(session_id: str, session: dict) -> None:
     from app.services.ai import dialogue_engine  # local import — heavy module
 
     pregen_future = None
-    pregen_total = max(0, len(story_data.get("storySpine") or []) - 2)  # skip 0 + final
+    # 3 variants per beat × (spine - 2) beats — each beat after the opening
+    # gets one variant per choice the player could have taken to get here,
+    # so the next scene reacts to the actual choice.
+    pregen_total = max(0, (len(story_data.get("storySpine") or []) - 2) * 3)
     if pregen_total > 0:
         pregen_done = {"n": 0}
         def _pregen_progress(idx: int) -> None:
@@ -203,10 +206,11 @@ def _run_pipeline(session_id: str, session: dict) -> None:
             _set_progress(
                 session_id, step="pre_render",
                 progress=72 + round(pregen_done["n"] / max(pregen_total, 1) * 15),
-                details=f"Pre-rendering future pages ({pregen_done['n']}/{pregen_total})",
+                details=f"Pre-rendering branch variants "
+                        f"({pregen_done['n']}/{pregen_total})",
             )
-        # Run pre-gen in its own pool. It returns when all beats are cached.
-        pregen_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pregen")
+        # Run pre-gen in its own pool. It returns when all variants are cached.
+        pregen_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="pregen")
         pregen_future = pregen_executor.submit(
             dialogue_engine.pre_expand_remaining_beats,
             session_id, _pregen_progress,

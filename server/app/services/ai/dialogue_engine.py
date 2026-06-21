@@ -165,10 +165,23 @@ def _call_flash(system_prompt: str, user_message: str,
     return response.candidates[0].content.parts[0].text
 
 
-def _expand_full_beat_live(ctx: dict, beat: dict, next_beat: dict | None) -> list[dict]:
-    """One Flash 2.5 call that produces the entire beat's statements."""
+def _expand_full_beat_live(
+    ctx: dict,
+    beat: dict,
+    next_beat: dict | None,
+    *,
+    previous_choice_text: str | None = None,
+    previous_choice_tag: str | None = None,
+) -> list[dict]:
+    """One Flash 2.5 call that produces the entire beat's statements.
+
+    Pass the previous beat's chosen choice so the first 1-2 statements of
+    this beat react to it — the variant won't read as 'any random next page'.
+    """
     system_prompt = build_beat_full_prompt(
         session=ctx, current_beat=beat, next_beat=next_beat,
+        previous_choice_text=previous_choice_text,
+        previous_choice_tag=previous_choice_tag,
     )
     text = _call_flash(system_prompt, "[PRE-RENDER THIS BEAT]",
                        history=None, max_output_tokens=1800)
@@ -178,9 +191,18 @@ def _expand_full_beat_live(ctx: dict, beat: dict, next_beat: dict | None) -> lis
 
 # ---------- pre-render pass -------------------------------------------------
 
-def pre_expand_beat(session_id: str, beat_index: int) -> bool:
-    """Generate + cache one beat's full content. Idempotent: skips if cached."""
-    if beat_expansions_queries.get(session_id, beat_index):
+def pre_expand_beat(
+    session_id: str,
+    beat_index: int,
+    *,
+    previous_choice_text: str | None = None,
+    previous_choice_tag: str | None = None,
+) -> bool:
+    """Generate + cache one beat variant. Idempotent: skips if the
+    (beat_index, source_choice_tag) variant is already cached.
+    """
+    tag = previous_choice_tag or ""
+    if beat_expansions_queries.get(session_id, beat_index, tag):
         return False
     ctx = _load_session_context(session_id)
     spine = ctx["storySpine"]
@@ -189,13 +211,18 @@ def pre_expand_beat(session_id: str, beat_index: int) -> bool:
     beat = spine[beat_index]
     next_beat = spine[beat_index + 1] if beat_index + 1 < len(spine) else None
     try:
-        statements = _expand_full_beat_live(ctx, beat, next_beat)
+        statements = _expand_full_beat_live(
+            ctx, beat, next_beat,
+            previous_choice_text=previous_choice_text,
+            previous_choice_tag=previous_choice_tag,
+        )
     except Exception as exc:
-        logger.warning("pre_expand beat %d failed: %s", beat_index, exc)
+        logger.warning("pre_expand beat %d (tag=%s) failed: %s",
+                       beat_index, tag, exc)
         return False
     if not statements:
         return False
-    beat_expansions_queries.save(session_id, beat_index, statements)
+    beat_expansions_queries.save(session_id, beat_index, tag, statements)
     return True
 
 
@@ -256,39 +283,68 @@ def pre_expand_all_endings(
 def pre_expand_remaining_beats(
     session_id: str,
     progress_cb: Callable[[int], None] | None = None,
-    max_workers: int = 4,
+    max_workers: int = 6,
 ) -> int:
-    """Pre-render every beat that isn't already cached, in parallel.
+    """Pre-render every beat VARIANT not already cached, in parallel.
 
-    Skips beat 0 (its content lives in the opening script / Start label) and
-    the final beat (its content depends on chosen_ending + alignment_state, so
-    it's always live). Used at the end of the generation pipeline and during
-    `complete_generation` resume.
+    For each beat N in [1, len(spine)-1), enumerate spine[N-1].choices and
+    pre-generate a variant per choice tag so beat N reacts to whichever of
+    the 3 choices the player picked at beat N-1.
+
+    Total target count is up to 3 × (len(spine) - 2) = 24 for a 10-beat
+    spine. Skips beat 0 (its content is the opening / Start label) and the
+    final beat (which uses ending_dialogue, keyed by chosen_ending).
     """
     ctx = _load_session_context(session_id)
     spine = ctx["storySpine"]
     if not spine or len(spine) < 2:
         return 0
 
-    already = beat_expansions_queries.beat_indices_for_session(session_id)
-    targets = [i for i in range(1, len(spine) - 1) if i not in already]
+    targets: list[tuple[int, str, str]] = []  # (beat_index, prev_tag, prev_text)
+    for beat_idx in range(1, len(spine) - 1):
+        prev_beat = spine[beat_idx - 1]
+        prev_choices = prev_beat.get("choices") or []
+        if not prev_choices:
+            # Beat with no source choices (only beat 1 if the opening had
+            # no spine choices — rare). Render the default '' variant once.
+            targets.append((beat_idx, "", ""))
+            continue
+        for ch in prev_choices[:3]:
+            tag = (ch.get("alignmentTag") or "").strip()
+            text = (ch.get("text") or "").strip()
+            if not tag:
+                continue
+            targets.append((beat_idx, tag, text))
+
+    already = beat_expansions_queries.variants_for_session(session_id)
+    targets = [t for t in targets if (t[0], t[1]) not in already]
     if not targets:
         return 0
 
-    logger.info("Pre-rendering %d beat(s) for session %s", len(targets), session_id)
+    logger.info("Pre-rendering %d beat variant(s) for session %s",
+                len(targets), session_id)
     done = 0
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(pre_expand_beat, session_id, i): i for i in targets}
+        futures = {
+            pool.submit(
+                pre_expand_beat, session_id, beat_idx,
+                previous_choice_text=text or None,
+                previous_choice_tag=tag or None,
+            ): (beat_idx, tag)
+            for beat_idx, tag, text in targets
+        }
         for fut in as_completed(futures):
-            idx = futures[fut]
+            beat_idx, tag = futures[fut]
             try:
                 if fut.result():
                     done += 1
             except Exception as exc:
-                logger.warning("pre-render beat %d crashed: %s", idx, exc)
+                logger.warning("pre-render beat %d/%s crashed: %s",
+                               beat_idx, tag, exc)
             if progress_cb:
-                progress_cb(idx)
-    logger.info("Pre-rendered %d/%d beats for session %s", done, len(targets), session_id)
+                progress_cb(beat_idx)
+    logger.info("Pre-rendered %d/%d variants for session %s",
+                done, len(targets), session_id)
     return done
 
 
@@ -377,24 +433,42 @@ def process_player_action(session_id: str, action: dict) -> dict:
             "endingFired": True,
         }
 
-    # ----- Cache lookup. Instant page-turn if hit.
-    cached = beat_expansions_queries.get(session_id, target_index)
+    # ----- Cache lookup, keyed by the choice the player just took.
+    # Each beat has up to 3 variants (one per source choice tag) so the
+    # next scene reacts to which choice was picked.
+    source_tag = (action.get("alignmentTag") or "").strip() if action_type == "choice" else ""
+    source_text = (action.get("text") or "").strip() if action_type == "choice" else ""
+
+    cached = beat_expansions_queries.get(session_id, target_index, source_tag)
     if cached:
         statements = cached["statements"]
-        logger.info("CACHE HIT beat %d (instant)", target_index)
+        logger.info("CACHE HIT beat %d (tag=%s)", target_index, source_tag or "<none>")
     else:
-        # Cache miss — fall back to live full-beat call. Also save so the
-        # next replay through this beat is instant.
-        logger.info("CACHE MISS beat %d — generating live", target_index)
-        next_beat = spine[target_index + 1] if target_index + 1 < len(spine) else None
-        try:
-            statements = _expand_full_beat_live(ctx, target_beat, next_beat)
-            if statements:
-                beat_expansions_queries.save(session_id, target_index, statements)
-        except Exception as exc:
-            logger.warning("live full-beat failed for %d: %s — empty result",
-                           target_index, exc)
-            statements = []
+        # Specific variant missing. Try any pre-rendered variant for this
+        # beat so we don't block the player on a live call.
+        fallback = beat_expansions_queries.get_any(session_id, target_index)
+        if fallback:
+            statements = fallback["statements"]
+            logger.info("CACHE PARTIAL beat %d (tag=%s not pre-rendered; "
+                        "served an alternate variant)", target_index, source_tag)
+        else:
+            logger.info("CACHE MISS beat %d (tag=%s) — generating live",
+                        target_index, source_tag or "<none>")
+            next_beat = spine[target_index + 1] if target_index + 1 < len(spine) else None
+            try:
+                statements = _expand_full_beat_live(
+                    ctx, target_beat, next_beat,
+                    previous_choice_text=source_text or None,
+                    previous_choice_tag=source_tag or None,
+                )
+                if statements:
+                    beat_expansions_queries.save(
+                        session_id, target_index, source_tag, statements,
+                    )
+            except Exception as exc:
+                logger.warning("live full-beat failed for %d: %s — empty result",
+                               target_index, exc)
+                statements = []
 
     spine_choices = target_beat.get("choices") or _fallback_choices(endings)
     if target_beat.get("sceneId"):
