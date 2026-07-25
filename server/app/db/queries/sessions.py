@@ -106,6 +106,15 @@ def update_status(session_id: str, status: str) -> None:
         )
 
 
+def update_engine(session_id: str, engine: str) -> None:
+    """Record which story-generation engine actually produced this session."""
+    with db() as conn:
+        conn.execute(
+            "UPDATE sessions SET storygen_engine = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (engine, session_id),
+        )
+
+
 def save_story_data(session_id: str, world_lore, plot_arc) -> None:
     with db() as conn:
         conn.execute(

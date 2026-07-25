@@ -29,6 +29,7 @@ from app.logger import logger
 from app.services.ai.gemini_client import get_client, models
 from app.services.ai.prompts.beat_expansion import (
     build_beat_full_prompt,
+    build_beat_rewrite_prompt,
     build_beat_system_prompt,
     build_ending_full_prompt,
 )
@@ -65,6 +66,9 @@ def _load_session_context(session_id: str) -> dict:
         "protagonistName": session["setup_protagonist_name"],
         "tone": session["setup_tone"],
         "currentLabel": session.get("current_label"),
+        # Engine that generated this story — drives free-input handling so it
+        # stays consistent regardless of the live STORYGEN_ENGINE flag.
+        "storygenEngine": session.get("storygen_engine") or "monolith",
     }
 
 
@@ -378,7 +382,12 @@ def process_player_action(session_id: str, action: dict) -> dict:
     action_type = action.get("type")
 
     # ----- Free-input: always live (custom user text needs a real response).
+    # With the multi-agent engine, route custom text through the Beat-Rewrite
+    # Agent, which folds it into the current beat and steers back to the
+    # pre-defined choices without changing the spine/endings.
     if action_type == "free-input":
+        if ctx.get("storygenEngine") == "graph":
+            return _beat_rewrite_response(session_id, ctx, action, beat_index, alignment_state)
         return _free_input_response(session_id, ctx, action, beat_index, alignment_state)
 
     # ----- Choice: apply alignment first, then move to next beat.
@@ -610,6 +619,54 @@ def _free_input_response(
         # Re-surface the current beat's pre-baked choices so the player can
         # still progress after their side-conversation.
         "choices": current_beat.get("choices") or _fallback_choices(endings),
+        "allowFreeInput": True,
+        "beatComplete": False,
+        "endingFired": False,
+    }
+
+
+def _beat_rewrite_response(
+    session_id: str,
+    ctx: dict,
+    action: dict,
+    beat_index: int,
+    alignment_state: dict,
+) -> dict:
+    """Beat-Rewrite Agent (multi-agent engine): fold the player's custom text
+    into the CURRENT beat in-character, then re-surface the same pre-defined
+    choices. Never changes the spine, alignment, scene, or endings — it only
+    keeps the player feeling heard while steering them back onto the rails.
+    """
+    spine = ctx["storySpine"]
+    endings = ctx["endings"]
+    # On the final beat there are no onward choices to steer toward; defer to
+    # the shared free-input handler so both engines behave identically there.
+    if beat_index == len(spine) - 1:
+        return _free_input_response(session_id, ctx, action, beat_index, alignment_state)
+
+    current_beat = spine[beat_index]
+    choices = current_beat.get("choices") or _fallback_choices(endings)
+
+    system_prompt = build_beat_rewrite_prompt(
+        session=ctx, current_beat=current_beat, choices=choices, endings=endings,
+    )
+    history = _build_conversation_history(session_id)
+    user_message = f"[PLAYER WRITES: \"{action.get('text', '')}\"]"
+    try:
+        text = _call_flash(system_prompt, user_message, history=history, max_output_tokens=650)
+        parsed = _parse_response(text)
+        statements = parsed.get("statements") or []
+    except Exception as exc:
+        logger.warning("beat-rewrite failed: %s — empty result", exc)
+        text = "{}"
+        statements = []
+
+    dialogue_history_queries.insert(session_id, "user", user_message, ctx.get("currentLabel"))
+    dialogue_history_queries.insert(session_id, "model", text, ctx.get("currentLabel"))
+
+    return {
+        "statements": statements,
+        "choices": choices,
         "allowFreeInput": True,
         "beatComplete": False,
         "endingFired": False,
