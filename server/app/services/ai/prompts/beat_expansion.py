@@ -257,3 +257,91 @@ RULES:
 - Always set `endingFired: true`."""
 
 
+def build_beat_rewrite_prompt(
+    *,
+    session: dict,
+    current_beat: dict,
+    choices: list[dict],
+    endings: list[dict],
+) -> str:
+    """Beat-Rewrite Agent: the player typed CUSTOM text instead of picking one
+    of the 3 choices. Weave their input into the CURRENT beat without changing
+    the overall story — same characters, same scene, same spine, same set of
+    endings — then steer them back toward the pre-defined choices so the
+    pre-architected branches and endings still drive the arc.
+    """
+    characters = session.get("characters") or []
+    current_scene = session.get("currentScene")
+    protagonist_name = session["protagonistName"]
+    tone = session["tone"]
+
+    in_beat = set(current_beat.get("castIds") or [])
+    beat_chars = [c for c in characters if c["id"] in in_beat] or characters
+    character_profiles = "\n".join(
+        f"- {c['id']} ({c['name']}): {(c.get('personality') or '')[:120]}. "
+        f"speech: {(c.get('speech_style') or c.get('speechStyle') or '')[:60]}"
+        for c in beat_chars
+    )
+
+    scene_text = (
+        f"{current_scene['name']} — {(current_scene.get('description') or '')[:140]}"
+        if current_scene
+        else current_beat.get("sceneId", "")
+    )
+
+    choice_lines = "\n".join(
+        f"  {i + 1}. \"{(ch.get('text') or '').strip()}\" "
+        f"(leads toward: {ch.get('alignmentTag', '')})"
+        for i, ch in enumerate(choices)
+    )
+    ending_names = ", ".join(
+        f"{e.get('name', e.get('id', ''))} [{e.get('alignmentTag', '')}]"
+        for e in (endings or [])
+    )
+
+    return f"""You are the BEAT-REWRITE AGENT for an interactive visual novel.
+The story is fully pre-architected: a fixed 10-beat spine, a fixed cast and
+scene list, and a fixed set of endings. The player just typed their OWN text
+instead of picking one of the pre-written choices. Your only job is to fold
+their input into the CURRENT beat in-character, then gently steer them back to
+the pre-defined choices — WITHOUT changing the overall story.
+
+TONE: {tone}
+PROTAGONIST (player-controlled — never speak as them): {protagonist_name}
+SCENE (do not change): {scene_text}
+
+CHARACTERS IN THIS BEAT (use only these — no new characters):
+{character_profiles}
+
+CURRENT BEAT ({current_beat.get('index', 0) + 1}/10): {current_beat.get('title','')}
+goal:    {current_beat.get('narrativeGoal','')}
+outline: {current_beat.get('outline','')}
+
+THE PRE-DEFINED CHOICES the player should ultimately pick from:
+{choice_lines}
+
+THE STORY'S FIXED ENDINGS (never invent new ones): {ending_names}
+
+OUTPUT — strict JSON:
+{{
+  "statements": [
+    {{ "type": "narration", "text": "..." }},
+    {{ "type": "dialogue", "speaker": "<character_id>", "expression": "happy|sad|angry|surprised|neutral|embarrassed|thinking|scared|determined|smug", "text": "..." }}
+  ],
+  "beatComplete": false,
+  "endingFired": false
+}}
+
+RULES:
+- Acknowledge the player's input naturally — characters react to what they
+  said or did. Make them feel heard.
+- 2-4 statements only. This is a side-beat, not a new scene.
+- DO NOT advance the plot, change the scene, alter alignment, introduce
+  characters, or resolve the beat. The spine and endings stay EXACTLY as set.
+- End by nudging the player back toward the situation the pre-defined choices
+  respond to (e.g. a character re-poses the decision) so they pick one next.
+- Keep "beatComplete": false and "endingFired": false — the runtime re-surfaces
+  the same 3 choices after your statements.
+- Stay in character. Never speak as the protagonist. Plain ASCII English."""
+
+

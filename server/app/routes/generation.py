@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from app.db.queries import characters as character_queries
 from app.db.queries import scenes as scene_queries
+from app.db.queries import sessions as session_queries
 from app.logger import logger
 from app.services import animation_generator, asset_manager, session_service, script_builder, tts_generator
 from app.services.ai import image_generator, story_generator
@@ -51,10 +52,18 @@ def _build_continuation_context(session: dict) -> dict | None:
     )
     if not chosen:
         return None
+    # Prior cast (id/name/role) so a continuation chapter REUSES the same
+    # character ids instead of minting new ones (the graph plot agent is told
+    # to reuse these; the monolith continuation prompt does the same).
+    prior_characters = [
+        {"id": c.get("id"), "name": c.get("name"), "role": c.get("role")}
+        for c in character_queries.get_by_session(parent_id)
+    ]
     return {
         "prior_session": parent,
         "prior_world": parent.get("world_lore") or {},
         "prior_ending": chosen,
+        "prior_characters": prior_characters,
         "chapter_number": int(session.get("chapter_number") or 2),
     }
 
@@ -75,7 +84,13 @@ def _run_pipeline(session_id: str, session: dict) -> None:
                   details="Weaving world, characters, spine, and endings...")
 
     continuation = _build_continuation_context(session)
-    story_data = story_generator.generate_world(setup, continuation=continuation)
+    story_data = story_generator.generate_world(
+        setup, continuation=continuation, session_id=session_id,
+    )
+    # Record the engine that actually produced this story (graph may fall back
+    # to monolith) so runtime free-input routing stays consistent later.
+    engine_used = story_data.pop("__engine__", "monolith")
+    session_queries.update_engine(session_id, engine_used)
     session_service.save_story_data(session_id, story_data)
 
     characters = story_data["characters"]

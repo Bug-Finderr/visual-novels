@@ -4,6 +4,7 @@ from typing import Any
 
 from google.genai import types
 
+from app.config import config
 from app.logger import logger
 from app.services.ai.gemini_client import get_client, models
 from app.services.ai.prompts.world_building import build_continuation_prompt, build_world_prompt
@@ -38,14 +39,93 @@ def _parse_json_loose(text: str) -> Any:
     raise ValueError("Failed to parse story generation response as JSON")
 
 
-def generate_world(setup: dict, *, continuation: dict | None = None) -> dict:
+def _validate_story(parsed: dict) -> None:
+    """Shared structural validation for both the monolith and graph engines.
+    Logs warnings (non-fatal) for soft mismatches; raises only on missing
+    top-level fields the pipeline cannot run without."""
+    required = ["worldLore", "characters", "scenes", "storySpine", "endings", "openingScript"]
+    missing = [k for k in required if not parsed.get(k)]
+    if missing:
+        raise ValueError(f"Story generation response missing required fields: {', '.join(missing)}")
+
+    if len(parsed["characters"]) < 3:
+        logger.warning("Only %d characters generated, expected 3-5", len(parsed["characters"]))
+    if len(parsed["storySpine"]) != 10:
+        logger.warning("storySpine has %d beats, expected 10", len(parsed["storySpine"]))
+    if len(parsed["endings"]) != 5:
+        logger.warning("endings has %d entries, expected 5", len(parsed["endings"]))
+
+    # name is NOT NULL in the DB and subscripted in save_story_data — fail fast
+    # here rather than at the INSERT if any scene/character is missing it.
+    for s in parsed["scenes"]:
+        if not s.get("id") or not s.get("name"):
+            raise ValueError(f"scene {s.get('id')!r} missing required id/name")
+    for c in parsed["characters"]:
+        if not c.get("id") or not c.get("name"):
+            raise ValueError(f"character {c.get('id')!r} missing required id/name")
+
+    scene_ids = {s["id"] for s in parsed["scenes"]}
+    char_ids = {c["id"] for c in parsed["characters"]}
+    ending_tags = {e.get("alignmentTag") for e in parsed["endings"] if e.get("alignmentTag")}
+    for beat in parsed["storySpine"]:
+        if beat.get("sceneId") not in scene_ids:
+            logger.warning("beat %s references missing sceneId %s", beat.get("id"), beat.get("sceneId"))
+        for cid in beat.get("castIds") or []:
+            if cid not in char_ids:
+                logger.warning("beat %s references unknown castId %s", beat.get("id"), cid)
+        choices = beat.get("choices") or []
+        if len(choices) < 2:
+            logger.warning("beat %s has only %d choices, expected 3", beat.get("id"), len(choices))
+        for ch in choices:
+            if ch.get("alignmentTag") not in ending_tags:
+                logger.warning("beat %s choice %r references unknown alignmentTag %s",
+                               beat.get("id"), (ch.get("text") or "")[:40], ch.get("alignmentTag"))
+    for ending in parsed["endings"]:
+        if ending.get("finalSceneId") not in scene_ids:
+            logger.warning("ending %s references missing finalSceneId %s",
+                           ending.get("id"), ending.get("finalSceneId"))
+
+    logger.info(
+        "World generated: %s, %d chars, %d scenes, %d beats, %d endings",
+        parsed["worldLore"].get("name"),
+        len(parsed["characters"]),
+        len(parsed["scenes"]),
+        len(parsed["storySpine"]),
+        len(parsed["endings"]),
+    )
+
+
+def generate_world(setup: dict, *, continuation: dict | None = None,
+                   session_id: str | None = None) -> dict:
     """Generate a complete world. If `continuation` is provided, treat this as
     the next chapter of an existing story — same world + cast, new spine +
     endings, picking up after the previous chapter's chosen ending.
 
     `continuation` keys: prior_session (row dict), prior_world (dict),
     prior_ending (dict), chapter_number (int).
+
+    Dispatches to the LangGraph multi-agent engine when STORYGEN_ENGINE=graph,
+    falling back to the monolith Pro call if the graph errors.
     """
+    if config.STORYGEN_ENGINE == "graph":
+        try:
+            from app.services.ai.storygraph import run_story_graph
+        except ImportError as exc:
+            logger.error("STORYGEN_ENGINE=graph but langgraph is not importable (%s) — "
+                         "install server/requirements.txt; falling back to monolith", exc)
+        else:
+            try:
+                story = run_story_graph(setup, continuation=continuation, session_id=session_id)
+                _validate_story(story)
+                story["__engine__"] = "graph"
+                return story
+            except Exception:
+                # Content/runtime failure inside the graph — fall back to the
+                # monolith so a generation still completes, but log loudly with
+                # a stack trace so the failure is never silent.
+                logger.error("storygraph engine failed — falling back to monolith",
+                             exc_info=True)
+
     if continuation:
         prompt = build_continuation_prompt(
             prior=continuation["prior_session"],
@@ -79,50 +159,6 @@ def generate_world(setup: dict, *, continuation: dict | None = None) -> dict:
             text += part.text
 
     parsed = _parse_json_loose(text)
-
-    required = ["worldLore", "characters", "scenes", "storySpine", "endings", "openingScript"]
-    missing = [k for k in required if not parsed.get(k)]
-    if missing:
-        raise ValueError(f"Story generation response missing required fields: {', '.join(missing)}")
-
-    if len(parsed["characters"]) < 3:
-        logger.warning("Only %d characters generated, expected 3-5", len(parsed["characters"]))
-    if len(parsed["storySpine"]) != 10:
-        logger.warning("storySpine has %d beats, expected 10", len(parsed["storySpine"]))
-    if len(parsed["endings"]) != 5:
-        logger.warning("endings has %d entries, expected 5", len(parsed["endings"]))
-
-    # Validate every beat's sceneId + castIds, beat choices, every ending's
-    # finalSceneId. Surfacing this here means the pipeline fails fast instead
-    # of at runtime when a player walks into a beat that points at a missing
-    # asset or has no choices to offer.
-    scene_ids = {s["id"] for s in parsed["scenes"]}
-    char_ids = {c["id"] for c in parsed["characters"]}
-    ending_tags = {e.get("alignmentTag") for e in parsed["endings"] if e.get("alignmentTag")}
-    for beat in parsed["storySpine"]:
-        if beat.get("sceneId") not in scene_ids:
-            logger.warning("beat %s references missing sceneId %s", beat.get("id"), beat.get("sceneId"))
-        for cid in beat.get("castIds") or []:
-            if cid not in char_ids:
-                logger.warning("beat %s references unknown castId %s", beat.get("id"), cid)
-        choices = beat.get("choices") or []
-        if len(choices) < 2:
-            logger.warning("beat %s has only %d choices, expected 3", beat.get("id"), len(choices))
-        for ch in choices:
-            if ch.get("alignmentTag") not in ending_tags:
-                logger.warning("beat %s choice %r references unknown alignmentTag %s",
-                               beat.get("id"), (ch.get("text") or "")[:40], ch.get("alignmentTag"))
-    for ending in parsed["endings"]:
-        if ending.get("finalSceneId") not in scene_ids:
-            logger.warning("ending %s references missing finalSceneId %s",
-                           ending.get("id"), ending.get("finalSceneId"))
-
-    logger.info(
-        "World generated: %s, %d chars, %d scenes, %d beats, %d endings",
-        parsed["worldLore"].get("name"),
-        len(parsed["characters"]),
-        len(parsed["scenes"]),
-        len(parsed["storySpine"]),
-        len(parsed["endings"]),
-    )
+    _validate_story(parsed)
+    parsed["__engine__"] = "monolith"
     return parsed

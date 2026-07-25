@@ -186,6 +186,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "chapter_number" not in sess_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN chapter_number INTEGER DEFAULT 1")
 
+    # Which generation engine actually produced this session's story
+    # ('monolith' | 'graph'). Recorded at generation time so runtime free-input
+    # routing stays consistent even if the STORYGEN_ENGINE flag is later flipped.
+    if "storygen_engine" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN storygen_engine TEXT DEFAULT 'monolith'")
+
     # Branching beat cache — if an older session has the single-variant
     # schema (no source_choice_tag column), drop the cache table so the
     # CREATE TABLE IF NOT EXISTS above rebuilds it with the new PK shape.
