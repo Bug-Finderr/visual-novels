@@ -45,7 +45,13 @@ class _Conn:
     def __init__(self, conn):
         self._conn = conn
 
-    def execute(self, sql: str, params: tuple | list = ()) -> _Result:
+    def execute(self, sql: str, params: tuple | list | dict = ()) -> _Result:
+        # The legacy query layer mixes two sqlite styles: '?' positional with a
+        # tuple, and ':name' with a dict. Pass dicts straight through as named
+        # binds; convert '?' tuples to :p0, :p1, ...
+        if isinstance(params, dict):
+            return _Result(self._conn.execute(text(sql), params))
+
         params = tuple(params or ())
         i = 0
 
