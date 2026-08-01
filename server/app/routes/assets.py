@@ -27,6 +27,16 @@ def serve_background(session_id: str, filename: str):
     return FileResponse(file_path, media_type="image/png", headers=_IMMUTABLE)
 
 
+@router.get("/{session_id}/cover.png")
+def serve_cover(session_id: str):
+    file_path = config.GENERATED_DIR / session_id / "cover.png"
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Cover not found")
+    # Cover can be regenerated; allow the client to revalidate via ?v= cache-bust.
+    return FileResponse(file_path, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
 @router.get("/{session_id}/audio/{filename}")
 def serve_audio(session_id: str, filename: str):
     file_path = config.GENERATED_DIR / session_id / "audio" / filename

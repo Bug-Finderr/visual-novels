@@ -43,6 +43,18 @@ def save_background(session_id: str, scene_id: str, image_bytes: bytes) -> Path:
     return path
 
 
+def get_cover_path(session_id: str) -> Path:
+    """Story cover key-visual (poster). Top-level so it's distinct from the
+    per-scene backgrounds and per-character sprites."""
+    return config.GENERATED_DIR / session_id / "cover.png"
+
+
+def save_cover(session_id: str, image_bytes: bytes) -> Path:
+    path = get_cover_path(session_id)
+    write_file(path, image_bytes)
+    return path
+
+
 def session_assets_exist(session_id: str) -> bool:
     return file_exists(config.GENERATED_DIR / session_id)
 

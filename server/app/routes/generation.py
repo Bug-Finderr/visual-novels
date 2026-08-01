@@ -185,12 +185,37 @@ def _run_pipeline(session_id: str, session: dict) -> None:
             logger.warning("background %s failed: %s", scene["id"], err)
         _emit_image_progress("backgrounds", f"Painting background — {scene['name']}")
 
+    # Story cover key-visual — one portrait illustration of the main cast in
+    # the setting, used on story cards / library. Runs in the shared image pool
+    # so it overlaps sprite + background generation. Kept out of the progress
+    # count (it's a single bonus image) so the ratio stays clean.
+    cover_ref = next(iter(neutral_images.values()), None)
+
+    def _do_cover() -> None:
+        try:
+            cover_ctx = {
+                "title": session.get("title") or story_data.get("worldLore", {}).get("name") or "",
+                "genre": setup["genre"],
+                "tone": setup["tone"],
+                "setting": setup["setting"],
+                "protagonist": setup["protagonistName"],
+                "characters": [
+                    {"name": c["name"], "appearance": c.get("appearance", "")}
+                    for c in characters[:3]
+                ],
+            }
+            image_generator.generate_cover(session_id, cover_ctx, art_style, reference_image=cover_ref)
+            logger.info("cover generated for session %s", session_id)
+        except Exception as err:
+            logger.warning("cover generation failed: %s", err)
+
     with ThreadPoolExecutor(max_workers=_PIPELINE_WORKERS) as pool:
         futures = []
         for task in sprite_tasks:
             futures.append(pool.submit(_do_sprite, task))
         for scene in scene_tasks:
             futures.append(pool.submit(_do_scene, scene))
+        futures.append(pool.submit(_do_cover))
         for _ in as_completed(futures):
             pass
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 function fmtDate(s) {
@@ -16,14 +17,25 @@ function fmtDate(s) {
 export default function StoryCard({ story, to, onDelete }) {
   const title = story.title || 'Untitled tale';
   const initial = title.trim().charAt(0).toUpperCase() || '?';
+
+  // A cover only exists once the pipeline has run; brand-new/errored sessions
+  // fall straight back to the initial. On a 404/load error we drop the img.
+  const mayHaveCover = ['ready', 'playing', 'generating'].includes(story.status);
+  const [coverOk, setCoverOk] = useState(mayHaveCover);
+  const bust = story.updated_at ? `?v=${String(story.updated_at).replace(/\D/g, '')}` : '';
+  const coverUrl = `/game-assets/${story.id}/cover.png${bust}`;
+
   return (
     <div className="story-card">
       <Link className="story-card__hit" to={to}>
         <div className="story-card__cover">
+          <span className="cover-initial" aria-hidden="true">{initial}</span>
+          {coverOk && (
+            <img src={coverUrl} alt="" loading="lazy" onError={() => setCoverOk(false)} />
+          )}
           <div className="story-card__badges">
             <span className={`badge badge-${story.status}`}>{story.status}</span>
           </div>
-          <span className="cover-initial" aria-hidden="true">{initial}</span>
         </div>
         <div className="story-card__body">
           <div className="story-card__tags">
