@@ -41,6 +41,7 @@ def _resolve_profile(session_id: str, character_id: str | None) -> dict:
         character_id,
         row.get("voice_caption"),
         gender=row.get("gender"),
+        speaker=row.get("voice_id"),  # the speaker assigned at generation
     )
 
 
