@@ -98,10 +98,15 @@ class Config(BaseSettings):
     def _normalize_engine(cls, v: str) -> str:
         return v.strip().lower()
 
-    @field_validator("STORYGRAPH_MAX_REVISIONS", mode="after")
+    @field_validator("STORYGRAPH_MAX_REVISIONS", mode="before")
     @classmethod
-    def _clamp_revisions(cls, v: int) -> int:
-        return max(0, v)
+    def _clamp_revisions(cls, v) -> int:
+        # Tolerate a malformed env value (fall back to 2) rather than crashing
+        # app import — matches the old _int_env behaviour.
+        try:
+            return max(0, int(v))
+        except (TypeError, ValueError):
+            return 2
 
     @property
     def google_oauth_enabled(self) -> bool:
