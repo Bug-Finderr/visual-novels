@@ -1,26 +1,45 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="manga-ink">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Storyplex — AI Visual Novel</title>
+    <title>StoryPlex — AI Visual Novels</title>
+    <meta name="description" content="Conjure a unique visual novel from a single premise — then share it, play others', and read on." />
+
+    <!-- Favicon: an inked speech bubble with a vermillion pop -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23F7F3E9'/%3E%3Cpath d='M12 14h40a6 6 0 0 1 6 6v18a6 6 0 0 1-6 6H30l-12 10v-10h-6a6 6 0 0 1-6-6V20a6 6 0 0 1 6-6z' fill='%23141414'/%3E%3Ccircle cx='24' cy='29' r='3.5' fill='%23E63329'/%3E%3Ccircle cx='34' cy='29' r='3.5' fill='%23F7F3E9'/%3E%3Ccircle cx='44' cy='29' r='3.5' fill='%23F7F3E9'/%3E%3C/svg%3E" />
+
+    <!-- Theme-pack fonts. Each pack picks its --font-display from these;
+         Inter is the shared body/UI face. Self-hosting is a later cleanup. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bangers&family=Baloo+2:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;800&family=Space+Mono:wght@400;700&display=swap"
     />
-    <link rel="stylesheet" href="/src/styles/main.css" />
+
+    <!-- Apply the saved theme before first paint to avoid a flash. -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('storyplex.theme');
+          var pref = raw ? JSON.parse(raw) : {};
+          var pack = pref.pack || 'manga-ink';
+          var mode = pref.mode || 'system';
+          var el = document.documentElement;
+          el.setAttribute('data-theme', pack);
+          var dark = mode === 'dark' || (mode === 'system' &&
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          el.setAttribute('data-mode', dark ? 'dark' : 'light');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'manga-ink');
+          document.documentElement.setAttribute('data-mode', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
-    <div id="app"></div>
-    <div id="monogatari" style="display: none;">
-      <visual-novel>
-        <language-selection-screen></language-selection-screen>
-        <game-screen></game-screen>
-        <loading-screen></loading-screen>
-      </visual-novel>
-    </div>
-    <script type="module" src="/src/main.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

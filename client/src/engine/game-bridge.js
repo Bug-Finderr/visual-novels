@@ -1,4 +1,4 @@
-import { api } from './api.js';
+import { api } from '../lib/api.js';
 import { AnimatedSprite } from './animated-sprite.js';
 import { audioCue } from './audio-cue.js';
 
@@ -154,11 +154,15 @@ class GameBridge {
     this.loadingOverlay = null;
   }
 
-  init({ sessionId, container, characters, scenes, script, session }) {
+  init({ sessionId, container, characters, scenes, script, session, navigate }) {
     this.sessionId = sessionId;
     this.container = container;
     this.session = session;
     this.script = script;
+    // Injected by the React host so the engine navigates through the app
+    // router instead of mutating the URL hash directly.
+    this._navigate = navigate || ((p) => { window.location.hash = p; });
+    this._disposed = false;
 
     this.characters = {};
     for (const c of characters) this.characters[c.id] = c;
@@ -398,7 +402,7 @@ class GameBridge {
     this.container.appendChild(card);
 
     card.querySelector('[data-act="library"]').addEventListener('click', () => {
-      window.location.hash = '/sessions';
+      this._navigate('/sessions');
     });
     card.querySelector('[data-act="continue"]').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
@@ -411,7 +415,7 @@ class GameBridge {
         // Kick off the generation pipeline on the new chapter and jump to
         // the loading screen so the player can watch progress.
         await api.post(`/sessions/${child.id}/generate`, {});
-        window.location.hash = `/loading/${child.id}`;
+        this._navigate(`/loading/${child.id}`);
       } catch (err) {
         btn.disabled = false;
         status.textContent = `Couldn't continue: ${err.message}`;
@@ -757,7 +761,7 @@ class GameBridge {
 
   async _handlePauseAction(act) {
     if (act === 'resume') return this._closePauseMenu();
-    if (act === 'menu') return (window.location.hash = '/sessions');
+    if (act === 'menu') return this._navigate('/sessions');
     if (act === 'save') return this._openSaveDialog();
     if (act === 'load') return this._openLoadDialog();
     if (act === 'restart') return this._confirmRestart();
@@ -886,6 +890,32 @@ class GameBridge {
     this.container.appendChild(t);
     setTimeout(() => t.classList.add('toast-out'), 1800);
     setTimeout(() => t.remove(), 2300);
+  }
+
+  /**
+   * Tear down everything init() attached so leaving the game leaks nothing:
+   * the document-level keydown listener, the RAF lip-sync loop, the live TTS
+   * WebSocket + AudioContext, any appended overlays, and all sprite rigs.
+   * The React GamePlayer calls this on unmount.
+   */
+  dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
+    this._stopVoice();
+    if (this._streamer) { try { this._streamer.stop(); } catch {} this._streamer = null; }
+    if (this._audioCtx) { try { this._audioCtx.close(); } catch {} this._audioCtx = null; }
+    if (this._onGlobalKey) {
+      document.removeEventListener('keydown', this._onGlobalKey);
+      this._onGlobalKey = null;
+    }
+    this._typewriterGen++;
+    this._isTyping = false;
+    if (this._pauseEl) { try { this._pauseEl.remove(); } catch {} this._pauseEl = null; }
+    for (const cid of Object.keys(this.sprites)) {
+      try { this.sprites[cid].destroy(); } catch {}
+    }
+    this.sprites = {};
+    this._endingCardShown = false;
   }
 }
 

@@ -1,0 +1,227 @@
+/* ==========================================================================
+   Base — reset, typography, motifs, site chrome. All via theme tokens.
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { min-height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* Per-pack ambient motif — a fixed layer behind everything. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+[data-theme='manga-ink'] body::before {
+  background-image: radial-gradient(var(--halftone) 1px, transparent 1.5px);
+  background-size: 11px 11px;
+  opacity: 0.55;
+}
+[data-theme='neon'] body::before {
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 46px, var(--halftone) 46px 47px),
+    repeating-linear-gradient(0deg, transparent 0 46px, var(--halftone) 46px 47px);
+  opacity: 0.6;
+}
+[data-theme='neon'][data-mode='dark'] body::before {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 60, 172, 0.16), transparent 60%),
+    repeating-linear-gradient(90deg, transparent 0 46px, var(--halftone) 46px 47px),
+    repeating-linear-gradient(0deg, transparent 0 46px, var(--halftone) 46px 47px);
+}
+[data-theme='otome'] body::before {
+  background:
+    radial-gradient(ellipse 70% 50% at 15% -5%, var(--accent-soft), transparent 60%),
+    radial-gradient(ellipse 60% 45% at 100% 105%, rgba(155, 140, 224, 0.12), transparent 65%);
+}
+[data-theme='kawaii'] body::before {
+  background-image: radial-gradient(var(--halftone) 5px, transparent 6px);
+  background-size: 40px 40px;
+  opacity: 0.6;
+}
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+/* ---- Typography ---- */
+h1, h2, h3, h4 { color: var(--ink); line-height: 1.05; }
+.display, h1.display, .display-title {
+  font-family: var(--font-display);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter);
+  font-weight: 700;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); }
+h2 { font-size: clamp(1.6rem, 3.2vw, 2.3rem); }
+h3 { font-size: 1.3rem; }
+
+p { color: var(--ink-soft); }
+
+a { color: var(--accent); text-decoration: none; transition: color var(--transition); }
+a:hover { color: var(--accent-strong); }
+
+.eyebrow {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.muted { color: var(--ink-soft); }
+.faint { color: var(--ink-faint); }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--ink-faint) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--ink-faint);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ---- App shell + layout ---- */
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+.app-main { flex: 1 0 auto; width: 100%; }
+
+.page {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 5rem;
+}
+.page--narrow { max-width: var(--content-max); }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-display);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter);
+  font-size: 1.5rem;
+  color: var(--ink);
+  margin-bottom: 1.25rem;
+}
+.section-title .rule {
+  flex: 1;
+  height: var(--border-width);
+  background: var(--line);
+}
+
+.page-head { margin-bottom: 2rem; }
+.page-head h1 { margin: 0.35rem 0 0.4rem; }
+.page-head p { font-size: 1.05rem; max-width: 60ch; }
+
+/* ---- Top navigation ---- */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: var(--border-width) solid var(--line);
+}
+.nav-inner {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-display);
+  text-transform: var(--display-transform);
+  letter-spacing: var(--display-letter);
+  font-size: 1.5rem;
+  color: var(--ink);
+}
+.brand:hover { color: var(--ink); }
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  transform: rotate(-4deg);
+}
+.nav-links { display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem; }
+.nav-link {
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: color var(--transition), background var(--transition);
+}
+.nav-link:hover { color: var(--ink); background: var(--surface-2); }
+.nav-link.active { color: var(--accent); }
+.nav-spacer { flex: 1; }
+.nav-actions { display: flex; align-items: center; gap: 0.6rem; }
+
+@media (max-width: 640px) {
+  .nav-links { display: none; }
+}
+
+/* ---- Footer ---- */
+.site-footer {
+  border-top: var(--border-width) solid var(--line);
+  padding: 2rem 1.5rem;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+.site-footer .foot-inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.site-footer .foot-inner .nav-spacer { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

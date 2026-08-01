@@ -1,0 +1,285 @@
+/* ==========================================================================
+   StoryPlex — Modular theme system
+   --------------------------------------------------------------------------
+   Every component styles itself through the SEMANTIC TOKENS below. A "theme
+   pack" is just a set of values for those tokens, selected at runtime via
+   [data-theme] on <html>; light/dark is [data-mode]. Swap the pack → the whole
+   app re-skins. Packs: manga-ink (default), neon, otome, kawaii.
+   ========================================================================== */
+
+:root {
+  /* ---- Shared geometry / rhythm (packs may override the radii + borders) -- */
+  --radius-sm: 3px;
+  --radius: 5px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+  --border-width: 2px;
+
+  /* Elevation + press interaction (packs override for their own "feel") */
+  --elev: 4px 4px 0 var(--border);
+  --elev-press: 1px 1px 0 var(--border);
+  --press-x: 3px;
+  --press-y: 3px;
+  --shadow-soft: 0 10px 30px -18px rgba(20, 20, 20, 0.5);
+
+  /* Fonts (packs pick their own --font-display) */
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: 'Bangers', 'Arial Black', sans-serif;
+  --display-transform: uppercase;
+  --display-letter: 0.03em;
+
+  /* Layout constants */
+  --nav-h: 62px;
+  --page-max: 1180px;
+  --content-max: 720px;
+  --transition: 0.18s ease;
+
+  /* Shared semantic state colors (packs may tweak) */
+  --success: #2e7d32;  --success-soft: rgba(46, 125, 50, 0.14);
+  --warning: #c77800;  --warning-soft: rgba(199, 120, 0, 0.16);
+  --danger:  #c62828;  --danger-soft:  rgba(198, 40, 40, 0.14);
+}
+
+/* ==========================================================================
+   PACK 1 — MANGA INK  (default)  ·  B&W shonen: ink, newsprint, vermillion
+   ========================================================================== */
+:root,
+[data-theme='manga-ink'] {
+  color-scheme: light;
+  --paper: #f4efe2;
+  --paper-2: #ece5d3;
+  --surface: #fffdf7;
+  --surface-2: #f0ead9;
+  --ink: #141414;
+  --ink-soft: #565247;
+  --ink-faint: #8a8578;
+  --line: rgba(20, 20, 20, 0.16);
+  --border: #141414;
+  --accent: #e63329;
+  --accent-strong: #c21f17;
+  --accent-ink: #fff7f0;
+  --accent-soft: rgba(230, 51, 41, 0.12);
+  --accent-2: #1f6fe0;
+  --focus: #e63329;
+  --overlay: rgba(20, 20, 18, 0.62);
+  --halftone: rgba(20, 20, 20, 0.16);
+
+  --border-width: 2px;
+  --radius-sm: 2px;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --elev: 4px 4px 0 var(--border);
+  --elev-press: 1px 1px 0 var(--border);
+  --press-x: 3px;
+  --press-y: 3px;
+  --shadow-soft: 0 12px 30px -20px rgba(20, 20, 20, 0.55);
+
+  --font-display: 'Bangers', 'Arial Black', sans-serif;
+  --display-transform: uppercase;
+  --display-letter: 0.03em;
+  --motif: halftone;
+}
+[data-theme='manga-ink'][data-mode='dark'] {
+  color-scheme: dark;
+  --paper: #17171a;
+  --paper-2: #1d1d20;
+  --surface: #202024;
+  --surface-2: #27272c;
+  --ink: #f4f1e8;
+  --ink-soft: #aba79c;
+  --ink-faint: #757169;
+  --line: rgba(244, 241, 232, 0.16);
+  --border: #f4f1e8;
+  --accent: #ff4a3d;
+  --accent-strong: #e63329;
+  --accent-ink: #16110f;
+  --accent-soft: rgba(255, 74, 61, 0.16);
+  --accent-2: #57a5ff;
+  --overlay: rgba(0, 0, 0, 0.7);
+  --halftone: rgba(244, 241, 232, 0.1);
+  --elev: 4px 4px 0 rgba(0, 0, 0, 0.55);
+  --elev-press: 1px 1px 0 rgba(0, 0, 0, 0.55);
+}
+
+/* ==========================================================================
+   PACK 2 — NEON CITY POP  ·  80s retro-anime synthwave (dark-native)
+   ========================================================================== */
+[data-theme='neon'] {
+  color-scheme: light;
+  /* light "day city" variant */
+  --paper: #f4f1ff;
+  --paper-2: #e9e3ff;
+  --surface: #ffffff;
+  --surface-2: #f0ecff;
+  --ink: #1b1140;
+  --ink-soft: #5b5288;
+  --ink-faint: #8b84b5;
+  --line: rgba(120, 60, 180, 0.16);
+  --border: #d6ccf5;
+  --accent: #e01e8e;
+  --accent-strong: #b4136e;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(224, 30, 142, 0.12);
+  --accent-2: #0fb5c7;
+  --focus: #0fb5c7;
+  --overlay: rgba(40, 20, 70, 0.45);
+  --halftone: rgba(120, 60, 180, 0.1);
+
+  --border-width: 1px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --elev: 0 0 0 1px var(--line), 0 10px 30px -14px rgba(224, 30, 142, 0.5);
+  --elev-press: 0 0 0 1px var(--line), 0 4px 14px -8px rgba(224, 30, 142, 0.5);
+  --press-x: 0px;
+  --press-y: 1px;
+  --shadow-soft: 0 16px 40px -22px rgba(120, 60, 180, 0.5);
+
+  --font-display: 'Orbitron', 'Arial Black', sans-serif;
+  --display-transform: uppercase;
+  --display-letter: 0.06em;
+  --motif: grid;
+}
+[data-theme='neon'][data-mode='dark'] {
+  color-scheme: dark;
+  --paper: #0c0a24;
+  --paper-2: #120f33;
+  --surface: #15123a;
+  --surface-2: #1d1a4a;
+  --ink: #ede9ff;
+  --ink-soft: #a79fe0;
+  --ink-faint: #6e67a8;
+  --line: rgba(160, 150, 255, 0.2);
+  --border: #2c2766;
+  --accent: #ff3cac;
+  --accent-strong: #d81e8e;
+  --accent-ink: #12071b;
+  --accent-soft: rgba(255, 60, 172, 0.18);
+  --accent-2: #21e6e0;
+  --focus: #21e6e0;
+  --overlay: rgba(6, 4, 20, 0.74);
+  --halftone: rgba(33, 230, 224, 0.14);
+  --elev: 0 0 0 1px var(--line), 0 0 22px -2px rgba(255, 60, 172, 0.45);
+  --elev-press: 0 0 0 1px var(--line), 0 0 12px -2px rgba(255, 60, 172, 0.5);
+}
+
+/* ==========================================================================
+   PACK 3 — SAKURA OTOME  ·  soft romantic dating-sim, pink + gilt + serif
+   ========================================================================== */
+[data-theme='otome'] {
+  color-scheme: light;
+  --paper: #fff6f8;
+  --paper-2: #fcebf0;
+  --surface: #fffdfe;
+  --surface-2: #fdeff4;
+  --ink: #43303b;
+  --ink-soft: #8a6c78;
+  --ink-faint: #b99faa;
+  --line: rgba(232, 93, 138, 0.18);
+  --border: #f0c8d8;
+  --accent: #e85d8a;
+  --accent-strong: #d2447a;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(232, 93, 138, 0.12);
+  --accent-2: #9b8ce0;
+  --focus: #e85d8a;
+  --overlay: rgba(67, 48, 59, 0.5);
+  --halftone: rgba(232, 93, 138, 0.1);
+
+  --border-width: 1px;
+  --radius-sm: 9px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --elev: 0 10px 24px -14px rgba(232, 93, 138, 0.5);
+  --elev-press: 0 5px 14px -10px rgba(232, 93, 138, 0.55);
+  --press-x: 0px;
+  --press-y: 1px;
+  --shadow-soft: 0 14px 34px -20px rgba(155, 140, 224, 0.45);
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --display-transform: none;
+  --display-letter: 0.01em;
+  --gilt: #d8b25a;
+  --motif: sakura;
+}
+[data-theme='otome'][data-mode='dark'] {
+  color-scheme: dark;
+  --paper: #241820;
+  --paper-2: #2c1e27;
+  --surface: #30222b;
+  --surface-2: #3a2833;
+  --ink: #f7e7ee;
+  --ink-soft: #c9a9b7;
+  --ink-faint: #93727f;
+  --line: rgba(244, 143, 177, 0.22);
+  --border: #5a3e4b;
+  --accent: #f48fb1;
+  --accent-strong: #e85d8a;
+  --accent-ink: #2a1820;
+  --accent-soft: rgba(244, 143, 177, 0.16);
+  --accent-2: #b39ddb;
+  --overlay: rgba(20, 12, 16, 0.66);
+  --gilt: #e8c36b;
+}
+
+/* ==========================================================================
+   PACK 4 — KAWAII POP  ·  candy sticker-book: bubblegum, mint, rounded
+   ========================================================================== */
+[data-theme='kawaii'] {
+  color-scheme: light;
+  --paper: #fdf4fb;
+  --paper-2: #f3ecff;
+  --surface: #ffffff;
+  --surface-2: #fdf0f7;
+  --ink: #2e2a4a;
+  --ink-soft: #7c74a0;
+  --ink-faint: #ada5c8;
+  --line: rgba(155, 123, 255, 0.18);
+  --border: #2e2a4a;
+  --accent: #ff6fb5;
+  --accent-strong: #e84e9c;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(255, 111, 181, 0.14);
+  --accent-2: #5cc8ff;
+  --focus: #ff6fb5;
+  --overlay: rgba(46, 42, 74, 0.5);
+  --halftone: rgba(155, 123, 255, 0.12);
+
+  --border-width: 2px;
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 24px;
+  --elev: 0 5px 0 rgba(46, 42, 74, 0.22);
+  --elev-press: 0 1px 0 rgba(46, 42, 74, 0.22);
+  --press-x: 0px;
+  --press-y: 4px;
+  --shadow-soft: 0 14px 30px -18px rgba(255, 111, 181, 0.5);
+
+  --font-display: 'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --display-transform: none;
+  --display-letter: 0.005em;
+  --lemon: #ffd84d;
+  --mint: #7be0c6;
+  --motif: polka;
+}
+[data-theme='kawaii'][data-mode='dark'] {
+  color-scheme: dark;
+  --paper: #1f1b33;
+  --paper-2: #262041;
+  --surface: #2b2547;
+  --surface-2: #332c54;
+  --ink: #f4eeff;
+  --ink-soft: #b9aee0;
+  --ink-faint: #837aa8;
+  --line: rgba(255, 138, 196, 0.22);
+  --border: #f4eeff;
+  --accent: #ff8ac4;
+  --accent-strong: #ff6fb5;
+  --accent-ink: #241833;
+  --accent-soft: rgba(255, 138, 196, 0.16);
+  --accent-2: #6fd3ff;
+  --overlay: rgba(15, 10, 25, 0.66);
+  --elev: 0 5px 0 rgba(0, 0, 0, 0.4);
+  --elev-press: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
