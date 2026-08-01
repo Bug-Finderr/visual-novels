@@ -1,7 +1,7 @@
 """Browser-facing TTS WebSocket — tunnels Mulberry's stream to the client.
 
 Flow:
-  1. Client opens WS at /api/sessions/{sid}/tts/stream
+  1. Client opens WS at /api/v1/sessions/{sid}/tts/stream
   2. Client sends one JSON frame: {scriptString, text, characterId?, expression?}
   3. Server resolves the character's voice profile (deterministic), checks the
      on-disk cache. If a WAV is already cached, server re-streams its PCM
@@ -30,7 +30,7 @@ from app.db.queries import characters as character_queries
 from app.logger import logger
 from app.services import silk_client, tts_generator
 
-router = APIRouter(prefix="/api/sessions", tags=["tts-stream"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["tts-stream"])
 
 
 def _resolve_profile(session_id: str, character_id: str | None) -> dict:

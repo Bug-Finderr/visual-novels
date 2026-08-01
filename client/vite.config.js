@@ -18,7 +18,7 @@ export default defineConfig({
       '/game-assets': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/game-assets/, '/api/assets'),
+        rewrite: (path) => path.replace(/^\/game-assets/, '/api/v1/assets'),
       },
     },
   },

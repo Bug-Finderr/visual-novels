@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 
 from app.config import config
 
-router = APIRouter(prefix="/api/assets", tags=["assets"])
+router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
 # Generated assets are content-addressed (char/expr filename, hash-named wav)
 # and never change in place. Aggressive caching eliminates the re-fetch lag

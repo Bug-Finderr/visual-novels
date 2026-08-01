@@ -18,15 +18,15 @@ export default function Profile() {
 
   const profileQ = useQuery({
     queryKey: ['profile', handle],
-    queryFn: () => api.get(`/v1/users/${handle}`),
+    queryFn: () => api.get(`/users/${handle}`),
     retry: false,
   });
 
   const follow = useMutation({
     mutationFn: (isFollowing) =>
       isFollowing
-        ? api.delete(`/v1/users/${handle}/follow`)
-        : api.post(`/v1/users/${handle}/follow`, {}),
+        ? api.delete(`/users/${handle}/follow`)
+        : api.post(`/users/${handle}/follow`, {}),
     // Optimistic toggle so the button feels instant.
     onMutate: async (isFollowing) => {
       await qc.cancelQueries({ queryKey: ['profile', handle] });

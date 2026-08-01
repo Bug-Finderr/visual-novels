@@ -11,7 +11,7 @@ from app.models.schemas import AdvanceRequest, ChoiceRequest, FreeInputRequest, 
 from app.services import playthrough_service, script_builder, session_service, tts_generator
 from app.services.ai import dialogue_engine
 
-router = APIRouter(prefix="/api/sessions", tags=["gameplay"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["gameplay"])
 
 
 def _process_ai_response(session_id: str, ai_output: dict, playthrough_id: str) -> dict:

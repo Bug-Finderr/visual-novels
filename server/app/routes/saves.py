@@ -16,7 +16,7 @@ from app.db.queries import playthroughs as pt_queries
 from app.db.queries import saves as save_queries
 from app.services import playthrough_service
 
-router = APIRouter(prefix="/api/sessions", tags=["saves"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["saves"])
 
 
 class VisibleChar(BaseModel):

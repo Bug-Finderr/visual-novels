@@ -1,4 +1,4 @@
-const BASE = '/api';
+const BASE = '/api/v1';
 
 async function request(method, path, body = null) {
   const opts = {

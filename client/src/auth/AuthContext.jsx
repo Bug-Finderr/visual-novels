@@ -14,7 +14,7 @@ export function AuthProvider({ children }) {
 
   const refresh = useCallback(async () => {
     try {
-      const data = await api.get('/v1/me');
+      const data = await api.get('/me');
       setUser(data.user || null);
       setGoogleEnabled(!!data.googleAuthEnabled);
     } catch {
@@ -35,7 +35,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      await api.post('/v1/auth/logout', {});
+      await api.post('/auth/logout', {});
     } catch {
       /* ignore — clear locally regardless */
     }

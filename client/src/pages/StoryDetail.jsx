@@ -40,19 +40,19 @@ export default function StoryDetail() {
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState(null);
 
-  const detailQ = useQuery({ queryKey: ['story', id], queryFn: () => api.get(`/v1/stories/${id}`) });
-  const commentsQ = useQuery({ queryKey: ['comments', id], queryFn: () => api.get(`/v1/stories/${id}/comments`) });
+  const detailQ = useQuery({ queryKey: ['story', id], queryFn: () => api.get(`/stories/${id}`) });
+  const commentsQ = useQuery({ queryKey: ['comments', id], queryFn: () => api.get(`/stories/${id}/comments`) });
 
   const like = useMutation({
-    mutationFn: (liked) => (liked ? api.delete(`/v1/stories/${id}/like`) : api.post(`/v1/stories/${id}/like`, {})),
+    mutationFn: (liked) => (liked ? api.delete(`/stories/${id}/like`) : api.post(`/stories/${id}/like`, {})),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['story', id] }),
   });
   const rate = useMutation({
-    mutationFn: (score) => api.post(`/v1/stories/${id}/rate`, { score }),
+    mutationFn: (score) => api.post(`/stories/${id}/rate`, { score }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['story', id] }),
   });
   const addComment = useMutation({
-    mutationFn: (payload) => api.post(`/v1/stories/${id}/comments`, payload),
+    mutationFn: (payload) => api.post(`/stories/${id}/comments`, payload),
     onSuccess: () => {
       setBody(''); setReplyTo(null);
       qc.invalidateQueries({ queryKey: ['comments', id] });
@@ -60,7 +60,7 @@ export default function StoryDetail() {
     },
   });
   const delComment = useMutation({
-    mutationFn: (cid) => api.delete(`/v1/stories/${id}/comments/${cid}`),
+    mutationFn: (cid) => api.delete(`/stories/${id}/comments/${cid}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comments', id] });
       qc.invalidateQueries({ queryKey: ['story', id] });

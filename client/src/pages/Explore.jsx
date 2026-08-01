@@ -18,7 +18,7 @@ export default function Explore() {
 
   const { data: stories = [], isLoading, isError, error } = useQuery({
     queryKey: following ? ['feed'] : ['explore', sort],
-    queryFn: () => api.get(following ? '/v1/feed' : `/sessions?sort=${sort}`),
+    queryFn: () => api.get(following ? '/feed' : `/sessions?sort=${sort}`),
     enabled: !following || !!user, // the feed needs a signed-in user
   });
 

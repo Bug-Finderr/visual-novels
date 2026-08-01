@@ -16,7 +16,7 @@ from app.logger import logger
 from app.services import animation_generator, asset_manager, session_service, script_builder, tts_generator
 from app.services.ai import image_generator, story_generator
 
-router = APIRouter(prefix="/api/sessions", tags=["generation"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["generation"])
 
 # In-memory progress store (sessionId -> dict)
 _progress: dict[str, dict] = {}

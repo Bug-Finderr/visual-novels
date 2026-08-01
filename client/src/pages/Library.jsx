@@ -13,7 +13,7 @@ export default function Library() {
   // Signed in → your own stories. Anonymous → the shared dev view of all.
   const query = useQuery({
     queryKey: user ? ['library', user.id] : ['sessions'],
-    queryFn: () => (user ? api.get('/v1/library') : api.get('/sessions')),
+    queryFn: () => (user ? api.get('/library') : api.get('/sessions')),
   });
 
   const stories = user ? (query.data?.stories || []) : (query.data || []);
@@ -26,7 +26,7 @@ export default function Library() {
   });
   const publish = useMutation({
     mutationFn: ({ id, makePublic }) =>
-      api.post(`/v1/library/${id}/${makePublic ? 'publish' : 'unpublish'}`, {}),
+      api.post(`/library/${id}/${makePublic ? 'publish' : 'unpublish'}`, {}),
     onSuccess: () => qc.invalidateQueries(),
   });
 

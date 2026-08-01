@@ -4,7 +4,7 @@ from app.auth.deps import get_current_user, require_owner, require_readable
 from app.models.schemas import SessionCreateRequest, SessionPatchRequest
 from app.services import session_service
 
-router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
 @router.post("", status_code=201)

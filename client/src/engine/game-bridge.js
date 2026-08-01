@@ -5,7 +5,7 @@ import { audioCue } from './audio-cue.js';
 const TTS_SAMPLE_RATE = 24000;
 
 /**
- * Streams raw int16 LE PCM @ 24 kHz mono from /api/sessions/{sid}/tts/stream
+ * Streams raw int16 LE PCM @ 24 kHz mono from /api/v1/sessions/{sid}/tts/stream
  * (which proxies Mulberry's WS) and plays it through an AudioContext while
  * the bytes are still arriving. Cached lines replay via the same endpoint —
  * the server reads the on-disk WAV and re-streams its PCM. An AnalyserNode
@@ -46,7 +46,7 @@ class StreamingVoicePlayer {
   play({ scriptString, text, characterId, expression }) {
     this.stop();
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${location.host}/api/sessions/${this.sessionId}/tts/stream`;
+    const url = `${proto}//${location.host}/api/v1/sessions/${this.sessionId}/tts/stream`;
     let ws;
     try {
       ws = new WebSocket(url);
