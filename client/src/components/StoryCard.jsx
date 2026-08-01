@@ -14,7 +14,7 @@ function fmtDate(s) {
  * Social counts (likes/ratings) are intentionally omitted until that data
  * exists — no fabricated engagement numbers.
  */
-export default function StoryCard({ story, to, onDelete }) {
+export default function StoryCard({ story, to, onDelete, onTogglePublish }) {
   const title = story.title || 'Untitled tale';
   const initial = title.trim().charAt(0).toUpperCase() || '?';
 
@@ -58,6 +58,16 @@ export default function StoryCard({ story, to, onDelete }) {
         >
           ✕
         </button>
+      )}
+      {onTogglePublish && (
+        <div className="story-card__bar">
+          <span className={`vis-dot vis-${story.visibility === 'public' ? 'public' : 'private'}`} />
+          <span>{story.visibility === 'public' ? 'Public' : 'Private'}</span>
+          <span className="spacer" />
+          <button className="btn btn-sm" onClick={onTogglePublish} disabled={story.status !== 'ready'}>
+            {story.visibility === 'public' ? 'Unpublish' : 'Publish'}
+          </button>
+        </div>
       )}
     </div>
   );

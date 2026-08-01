@@ -74,6 +74,10 @@ def claim_ownerless(owner_id: str) -> int:
     return session_queries.claim_ownerless(owner_id)
 
 
+def set_visibility(session_id: str, visibility: str) -> None:
+    session_queries.set_visibility(session_id, visibility)
+
+
 def get_by_id(session_id: str) -> dict | None:
     session = session_queries.get_by_id(session_id)
     if not session:

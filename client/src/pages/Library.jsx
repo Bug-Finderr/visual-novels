@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import StoryCard from '../components/StoryCard.jsx';
 import { routeForStory } from './Landing.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { useConfirm } from '../components/ConfirmProvider.jsx';
 
 export default function Library() {
   const qc = useQueryClient();
@@ -17,15 +18,34 @@ export default function Library() {
 
   const stories = user ? (query.data?.stories || []) : (query.data || []);
 
+  const confirm = useConfirm();
+
   const del = useMutation({
     mutationFn: (id) => api.delete(`/sessions/${id}`),
     onSuccess: () => qc.invalidateQueries(),
   });
+  const publish = useMutation({
+    mutationFn: ({ id, makePublic }) =>
+      api.post(`/v1/library/${id}/${makePublic ? 'publish' : 'unpublish'}`, {}),
+    onSuccess: () => qc.invalidateQueries(),
+  });
 
-  const onDelete = (story) => (e) => {
+  const onDelete = (story) => async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (window.confirm('Delete this tale? This cannot be undone.')) del.mutate(story.id);
+    const ok = await confirm({
+      title: 'Delete this tale?',
+      message: 'This permanently removes the story and its generated assets. This can’t be undone.',
+      confirmText: 'Delete',
+      danger: true,
+    });
+    if (ok) del.mutate(story.id);
+  };
+
+  const onTogglePublish = (story) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    publish.mutate({ id: story.id, makePublic: story.visibility !== 'public' });
   };
 
   const { isLoading, isError, error } = query;
@@ -61,7 +81,13 @@ export default function Library() {
       ) : (
         <div className="grid-cards">
           {stories.map((s) => (
-            <StoryCard key={s.id} story={s} to={routeForStory(s)} onDelete={onDelete(s)} />
+            <StoryCard
+              key={s.id}
+              story={s}
+              to={routeForStory(s)}
+              onDelete={onDelete(s)}
+              onTogglePublish={user ? onTogglePublish(s) : undefined}
+            />
           ))}
         </div>
       )}

@@ -111,12 +111,35 @@ def get_for_owner(owner_id: str) -> list[dict]:
             """
             SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
               created_at, updated_at, last_played_at,
-              parent_session_id, chapter_number
+              parent_session_id, chapter_number, visibility, published_at
             FROM sessions WHERE owner_id = ? ORDER BY updated_at DESC
             """,
             (owner_id,),
         ).fetchall()
     return rows_to_list(rows)
+
+
+def set_visibility(session_id: str, visibility: str) -> None:
+    """Publish ('public') or unpublish ('private'/'unlisted') a story."""
+    with db() as conn:
+        if visibility == "public":
+            conn.execute(
+                """
+                UPDATE sessions
+                SET visibility = ?, published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (visibility, session_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE sessions
+                SET visibility = ?, published_at = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (visibility, session_id),
+            )
 
 
 def count_ownerless() -> int:

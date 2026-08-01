@@ -767,9 +767,9 @@ class GameBridge {
     if (act === 'restart') return this._confirmRestart();
   }
 
-  _openSaveDialog() {
+  async _openSaveDialog() {
     this._closePauseMenu();
-    const name = prompt('Name this save (optional):', `Beat ${(this._currentBeatIndex ?? 0) + 1}`);
+    const name = await this._modal({ message: 'Name this save (optional):', prompt: true, defaultValue: `Beat ${(this._currentBeatIndex ?? 0) + 1}`, confirmText: 'Save' });
     if (name === null) return this._openPauseMenu();
     api.post(`/sessions/${this.sessionId}/saves`, {
       name: name || null,
@@ -821,7 +821,7 @@ class GameBridge {
       const id = row.dataset.id;
       row.querySelector('[data-act="load"]').addEventListener('click', () => this._loadSave(id));
       row.querySelector('[data-act="del"]').addEventListener('click', async () => {
-        if (!confirm('Delete this save?')) return;
+        if (!(await this._modal({ message: 'Delete this save?', confirmText: 'Delete', danger: true }))) return;
         try {
           await api.delete(`/sessions/${this.sessionId}/saves/${id}`);
           row.remove();
@@ -841,9 +841,9 @@ class GameBridge {
     this._applySnapshot(save);
   }
 
-  _confirmRestart() {
+  async _confirmRestart() {
     this._closePauseMenu();
-    if (!confirm('Restart this tale from the beginning? Your current progress will be wiped.')) return;
+    if (!(await this._modal({ message: 'Restart this tale from the beginning? Your current progress will be wiped.', confirmText: 'Restart', danger: true }))) return;
     api.post(`/sessions/${this.sessionId}/restart`, {})
       .then(() => window.location.reload())
       .catch((err) => this._toast(`Restart failed: ${err.message}`));
@@ -890,6 +890,38 @@ class GameBridge {
     this.container.appendChild(t);
     setTimeout(() => t.classList.add('toast-out'), 1800);
     setTimeout(() => t.remove(), 2300);
+  }
+
+  /**
+   * In-page animated confirm/prompt, replacing native confirm()/prompt().
+   * Resolves to true/false (confirm) or the string/null (prompt). Cancel is
+   * focused by default so destructive actions need a deliberate click.
+   */
+  _modal({ message, confirmText = 'OK', cancelText = 'Cancel', danger = false, prompt = false, defaultValue = '' }) {
+    return new Promise((resolve) => {
+      const el = document.createElement('div');
+      el.className = 'pause-menu';
+      const val = String(defaultValue || '').replace(/"/g, '&quot;');
+      el.innerHTML = `
+        <div class="pause-card" style="text-align:left;">
+          <p class="modal-message">${message}</p>
+          ${prompt ? `<input class="input vn-modal-input" type="text" value="${val}" />` : ''}
+          <div class="modal-actions">
+            <button class="btn" data-act="cancel">${cancelText}</button>
+            <button class="btn ${danger ? 'btn-danger-solid' : 'btn-primary'}" data-act="ok">${confirmText}</button>
+          </div>
+        </div>`;
+      this.container.appendChild(el);
+      const input = el.querySelector('.vn-modal-input');
+      const cancelBtn = el.querySelector('[data-act="cancel"]');
+      const okBtn = el.querySelector('[data-act="ok"]');
+      if (input) { input.focus(); input.select(); } else { cancelBtn.focus(); }
+      const done = (v) => { el.remove(); resolve(v); };
+      cancelBtn.addEventListener('click', () => done(prompt ? null : false));
+      okBtn.addEventListener('click', () => done(prompt ? (input ? input.value : '') : true));
+      el.addEventListener('click', (e) => { if (e.target === el) done(prompt ? null : false); });
+      if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(input.value); });
+    });
   }
 
   /**
