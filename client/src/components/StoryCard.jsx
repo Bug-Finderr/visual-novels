@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 function fmtDate(s) {
   if (!s) return '';
@@ -15,6 +15,7 @@ function fmtDate(s) {
  * exists — no fabricated engagement numbers.
  */
 export default function StoryCard({ story, to, onDelete, onTogglePublish }) {
+  const navigate = useNavigate();
   const title = story.title || 'Untitled tale';
   const initial = title.trim().charAt(0).toUpperCase() || '?';
 
@@ -45,7 +46,18 @@ export default function StoryCard({ story, to, onDelete, onTogglePublish }) {
           </div>
           <h3 className="story-card__title">{title}</h3>
           {story.author_username && (
-            <div className="story-card__author">by @{story.author_username}</div>
+            <div className="story-card__author">
+              by{' '}
+              <span
+                role="link"
+                tabIndex={0}
+                className="author-link"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/u/${story.author_username}`); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); navigate(`/u/${story.author_username}`); } }}
+              >
+                @{story.author_username}
+              </span>
+            </div>
           )}
           <div className="story-card__foot">
             {story.like_count !== undefined ? (

@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth.deps import get_current_user, optional_user, require_readable
+from app.db.queries import follows as follow_queries
 from app.db.queries import sessions as session_queries
 from app.db.queries import social as social_queries
+from app.db.queries import users as user_queries
 
 router = APIRouter(prefix="/api/v1", tags=["social"])
 
@@ -119,3 +121,55 @@ def delete_comment(session_id: str, comment_id: str, user: dict = Depends(get_cu
     if not social_queries.delete_comment(comment_id, user["id"]):
         raise HTTPException(status_code=404, detail="Comment not found")
     return {"deleted": comment_id}
+
+
+# --- Creator profiles + follow graph -------------------------------------
+@router.get("/users/{username}")
+def user_profile(username: str, viewer: dict | None = Depends(optional_user)):
+    u = user_queries.get_by_username(username)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    c = follow_queries.counts(u["id"])
+    stories = session_queries.get_public_by_owner(u["id"])
+    return {
+        "id": u["id"],
+        "username": u["username"],
+        "displayName": u.get("display_name"),
+        "avatarUrl": u.get("avatar_url"),
+        "bio": u.get("bio"),
+        "createdAt": u.get("created_at"),
+        "followers": c["followers"],
+        "following": c["following"],
+        "storyCount": len(stories),
+        "isMe": bool(viewer and viewer["id"] == u["id"]),
+        "isFollowing": bool(viewer and not (viewer["id"] == u["id"])
+                            and follow_queries.is_following(viewer["id"], u["id"])),
+        "stories": stories,
+    }
+
+
+@router.post("/users/{username}/follow")
+def follow_user(username: str, user: dict = Depends(get_current_user)):
+    u = user_queries.get_by_username(username)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    if u["id"] == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot follow yourself")
+    follow_queries.follow(user["id"], u["id"])
+    return {"isFollowing": True, "followers": follow_queries.counts(u["id"])["followers"]}
+
+
+@router.delete("/users/{username}/follow")
+def unfollow_user(username: str, user: dict = Depends(get_current_user)):
+    u = user_queries.get_by_username(username)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    follow_queries.unfollow(user["id"], u["id"])
+    return {"isFollowing": False, "followers": follow_queries.counts(u["id"])["followers"]}
+
+
+@router.get("/feed")
+def following_feed(user: dict = Depends(get_current_user)):
+    """Published stories from the creators the current user follows."""
+    ids = follow_queries.following_ids(user["id"])
+    return session_queries.get_public_from_owners(ids)

@@ -730,3 +730,57 @@ button.theme-pop__item { width: 100%; font-family: var(--font-body); }
 .btn-danger-solid:hover:not(:disabled) { filter: brightness(1.06); }
 @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modalPop { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+/* ---- Author links (clickable @handle) ---- */
+.author-link { color: var(--accent-ink); font-weight: 700; cursor: pointer; border-radius: var(--radius-sm); }
+.author-link:hover { color: var(--accent); text-decoration: underline; }
+.author-link:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.comment__author { color: inherit; text-decoration: none; }
+.comment__author:hover b { color: var(--accent); text-decoration: underline; }
+a.detail__author { text-decoration: none; transition: color var(--transition); }
+a.detail__author:hover b { color: var(--accent); text-decoration: underline; }
+
+/* ---- Following tab divider ---- */
+.sort-tabs__div { width: var(--border-width); align-self: stretch; background: var(--border); margin: 0.2rem 0.35rem; border-radius: 1px; }
+
+/* ---- Creator profile ---- */
+.profile-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.75rem 0 1.25rem;
+  border-bottom: var(--border-width) solid var(--border);
+  margin-bottom: 1.25rem;
+}
+.profile-avatar {
+  width: 104px; height: 104px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid; place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--elev);
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  flex: none;
+}
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-id h1 { margin: 0 0 0.15rem; }
+.profile-handle { color: var(--ink-soft); font-weight: 700; }
+.profile-bio { color: var(--ink-soft); margin: 0.6rem 0 0.4rem; max-width: 52ch; line-height: 1.55; }
+.profile-meta { font-size: 0.85rem; }
+.profile-cta { align-self: start; }
+.profile-stats {
+  display: flex; gap: 1.75rem; flex-wrap: wrap;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 0.5rem;
+}
+.profile-stats b { color: var(--ink); font-family: var(--font-display); font-size: 1.1rem; margin-right: 0.15rem; }
+@media (max-width: 640px) {
+  .profile-head { grid-template-columns: auto 1fr; }
+  .profile-cta { grid-column: 1 / -1; }
+  .profile-avatar { width: 76px; height: 76px; font-size: 1.9rem; }
+}

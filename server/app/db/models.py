@@ -242,3 +242,10 @@ class Comment(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime)
     __table_args__ = (Index("idx_comments_session_created", "session_id", "created_at"),)
+
+
+class Follow(Base):
+    __tablename__ = "follows"
+    follower_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    followee_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    created_at = Column(DateTime, server_default=func.now())

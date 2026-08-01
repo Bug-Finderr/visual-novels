@@ -124,6 +124,41 @@ def get_public(sort: str = "new", limit: int = 60) -> list[dict]:
     return rows_to_list(rows)
 
 
+def get_public_by_owner(owner_id: str, limit: int = 60) -> list[dict]:
+    """A creator's published stories (for their public profile page)."""
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.owner_id = ? AND s.visibility = 'public'
+            ORDER BY s.published_at DESC NULLS LAST, s.updated_at DESC
+            LIMIT {int(limit)}
+            """,
+            (owner_id,),
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def get_public_from_owners(owner_ids: list[str], limit: int = 60) -> list[dict]:
+    """Published stories from a set of creators — the 'Following' feed."""
+    if not owner_ids:
+        return []
+    placeholders = ", ".join(["?"] * len(owner_ids))
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.visibility = 'public' AND s.owner_id IN ({placeholders})
+            ORDER BY s.published_at DESC NULLS LAST, s.updated_at DESC
+            LIMIT {int(limit)}
+            """,
+            tuple(owner_ids),
+        ).fetchall()
+    return rows_to_list(rows)
+
+
 def get_card(session_id: str) -> dict | None:
     """A single story's card-level metadata + author + counts (for detail)."""
     with db() as conn:

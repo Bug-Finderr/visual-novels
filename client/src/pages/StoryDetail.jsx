@@ -90,7 +90,7 @@ export default function StoryDetail() {
       </span>
       <div className="comment__body">
         <div className="comment__head">
-          <b>{c.author.displayName || c.author.username}</b>
+          <Link to={`/u/${c.author.username}`} className="comment__author"><b>{c.author.displayName || c.author.username}</b></Link>
           <span className="faint">@{c.author.username} · {fmtDate(c.createdAt)}</span>
         </div>
         <p className={c.deleted ? 'faint' : ''}>{c.deleted ? '[deleted]' : c.body}</p>
@@ -132,12 +132,12 @@ export default function StoryDetail() {
           </div>
           <h1 className="display">{s.title}</h1>
           {s.author?.username && (
-            <div className="detail__author">
+            <Link to={`/u/${s.author.username}`} className="detail__author">
               <span className="user-avatar" style={{ width: 26, height: 26, fontSize: '0.7rem' }}>
                 <Avatar url={s.author.avatarUrl} name={s.author.displayName || s.author.username} />
               </span>
               by <b>@{s.author.username}</b>
-            </div>
+            </Link>
           )}
           {s.setting && <p className="detail__desc">{s.setting}</p>}
 
