@@ -30,8 +30,10 @@ def save(session_id: str, ending_id: str, statements: list) -> None:
     with db() as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO ending_dialogue (session_id, ending_id, statements)
+            INSERT INTO ending_dialogue (session_id, ending_id, statements)
             VALUES (?, ?, ?)
+            ON CONFLICT (session_id, ending_id)
+            DO UPDATE SET statements = EXCLUDED.statements
             """,
             (session_id, ending_id, payload),
         )

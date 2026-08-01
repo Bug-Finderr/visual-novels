@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from app.config import config
 
 # pool_pre_ping avoids handing out a dead connection after Postgres restarts.
-engine = create_engine(config.DATABASE_URL, pool_pre_ping=True, future=True)
+# Pool sized for concurrent requests + the pipeline's image/TTS worker pools.
+engine = create_engine(
+    config.DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=1800,
+    future=True,
+)
 
 SessionLocal = sessionmaker(
     bind=engine, autoflush=False, expire_on_commit=False, class_=Session, future=True

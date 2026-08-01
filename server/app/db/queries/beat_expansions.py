@@ -68,9 +68,11 @@ def save(
     with db() as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO beat_expansions
+            INSERT INTO beat_expansions
                 (session_id, beat_index, source_choice_tag, statements)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT (session_id, beat_index, source_choice_tag)
+            DO UPDATE SET statements = EXCLUDED.statements
             """,
             (session_id, beat_index, source_choice_tag or "", payload),
         )
