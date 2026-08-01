@@ -44,8 +44,21 @@ export default function StoryCard({ story, to, onDelete, onTogglePublish }) {
             {story.chapter_number > 1 && <span className="chip chip-plain">Ch. {story.chapter_number}</span>}
           </div>
           <h3 className="story-card__title">{title}</h3>
+          {story.author_username && (
+            <div className="story-card__author">by @{story.author_username}</div>
+          )}
           <div className="story-card__foot">
-            <span>{fmtDate(story.created_at)}</span>
+            {story.like_count !== undefined ? (
+              <>
+                <span className="heartline">♥ {story.like_count || 0}</span>
+                {story.rating_count > 0 && (
+                  <span className="stars">★ {(story.rating_sum / story.rating_count).toFixed(1)}</span>
+                )}
+                <span>▶ {story.play_count || 0}</span>
+              </>
+            ) : (
+              <span>{fmtDate(story.created_at)}</span>
+            )}
           </div>
         </div>
       </Link>

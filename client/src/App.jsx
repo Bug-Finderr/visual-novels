@@ -3,6 +3,7 @@ import Layout from './components/Layout.jsx';
 import Landing from './pages/Landing.jsx';
 import Explore from './pages/Explore.jsx';
 import Library from './pages/Library.jsx';
+import StoryDetail from './pages/StoryDetail.jsx';
 import Setup from './pages/Setup.jsx';
 import Loading from './pages/Loading.jsx';
 import Game from './pages/Game.jsx';
@@ -16,6 +17,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Landing />} />
         <Route path="/explore" element={<Explore />} />
+        <Route path="/story/:id" element={<StoryDetail />} />
         <Route path="/library" element={<Library />} />
         <Route path="/create" element={<Setup />} />
         <Route path="/loading/:id" element={<Loading />} />
