@@ -1,8 +1,9 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth.deps import require_owner, require_readable
 from app.db.queries import sessions as session_queries
 from app.logger import logger
 from app.models.schemas import AdvanceRequest, ChoiceRequest, FreeInputRequest, GameplayResponse
@@ -63,7 +64,7 @@ def _process_ai_response(session_id: str, ai_output: dict) -> dict:
 
 
 @router.post("/{session_id}/choice", response_model=GameplayResponse)
-async def handle_choice(session_id: str, payload: ChoiceRequest):
+async def handle_choice(session_id: str, payload: ChoiceRequest, _s: dict = Depends(require_owner)):
     try:
         ai_output = await asyncio.to_thread(
             dialogue_engine.process_player_action,
@@ -86,7 +87,7 @@ async def handle_choice(session_id: str, payload: ChoiceRequest):
 
 
 @router.post("/{session_id}/free-input", response_model=GameplayResponse)
-async def handle_free_input(session_id: str, payload: FreeInputRequest):
+async def handle_free_input(session_id: str, payload: FreeInputRequest, _s: dict = Depends(require_owner)):
     try:
         ai_output = await asyncio.to_thread(
             dialogue_engine.process_player_action,
@@ -103,7 +104,9 @@ async def handle_free_input(session_id: str, payload: FreeInputRequest):
 
 
 @router.post("/{session_id}/advance", response_model=GameplayResponse)
-async def handle_advance(session_id: str, _payload: AdvanceRequest | None = None):
+async def handle_advance(
+    session_id: str, _payload: AdvanceRequest | None = None, _s: dict = Depends(require_owner)
+):
     """No-choice continue: opening script ran out, just expand the current beat."""
     try:
         ai_output = await asyncio.to_thread(
@@ -121,5 +124,5 @@ async def handle_advance(session_id: str, _payload: AdvanceRequest | None = None
 
 
 @router.get("/{session_id}/script")
-def get_script(session_id: str):
+def get_script(session_id: str, _s: dict = Depends(require_readable)):
     return script_builder.load_script(session_id)

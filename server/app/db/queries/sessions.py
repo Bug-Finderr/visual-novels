@@ -92,6 +92,19 @@ def get_all() -> list[dict]:
     return rows_to_list(rows)
 
 
+def get_public() -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
+              created_at, updated_at, last_played_at,
+              parent_session_id, chapter_number
+            FROM sessions WHERE visibility = 'public' ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    return rows_to_list(rows)
+
+
 def get_for_owner(owner_id: str) -> list[dict]:
     with db() as conn:
         rows = conn.execute(

@@ -58,6 +58,10 @@ def get_all() -> list[dict]:
     return session_queries.get_all()
 
 
+def list_public() -> list[dict]:
+    return session_queries.get_public()
+
+
 def list_for_owner(owner_id: str) -> list[dict]:
     return session_queries.get_for_owner(owner_id)
 

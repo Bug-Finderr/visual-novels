@@ -12,9 +12,10 @@ import json
 import shutil
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.auth.deps import require_owner
 from app.config import config
 from app.db.database import db
 from app.db.queries import beat_expansions as beat_expansions_queries
@@ -49,7 +50,7 @@ class CreateSaveRequest(BaseModel):
 
 
 @router.post("/{session_id}/saves")
-def create_save(session_id: str, payload: CreateSaveRequest):
+def create_save(session_id: str, payload: CreateSaveRequest, _s: dict = Depends(require_owner)):
     session = session_queries.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -62,12 +63,12 @@ def create_save(session_id: str, payload: CreateSaveRequest):
 
 
 @router.get("/{session_id}/saves")
-def list_saves(session_id: str):
+def list_saves(session_id: str, _s: dict = Depends(require_owner)):
     return save_queries.list_for_session(session_id)
 
 
 @router.get("/{session_id}/saves/{save_id}")
-def load_save(session_id: str, save_id: str):
+def load_save(session_id: str, save_id: str, _s: dict = Depends(require_owner)):
     save = save_queries.get(session_id, save_id)
     if not save:
         raise HTTPException(status_code=404, detail="Save not found")
@@ -75,13 +76,13 @@ def load_save(session_id: str, save_id: str):
 
 
 @router.delete("/{session_id}/saves/{save_id}")
-def delete_save(session_id: str, save_id: str):
+def delete_save(session_id: str, save_id: str, _s: dict = Depends(require_owner)):
     save_queries.delete(session_id, save_id)
     return {"deleted": save_id}
 
 
 @router.post("/{session_id}/restart")
-def restart_session(session_id: str):
+def restart_session(session_id: str, _s: dict = Depends(require_owner)):
     """Reset spine progress + drop all runtime-generated labels.
 
     Kept: the world, characters, scenes, opening script (the 'Start' label),

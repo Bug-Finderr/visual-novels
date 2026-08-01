@@ -4,8 +4,10 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import AsyncIterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
+from app.auth.deps import require_owner, require_readable
 
 from app.db.queries import characters as character_queries
 from app.db.queries import scenes as scene_queries
@@ -370,7 +372,7 @@ async def _pipeline_runner(session_id: str, session: dict) -> None:
 
 
 @router.post("/{session_id}/generate")
-async def start_generation(session_id: str):
+async def start_generation(session_id: str, _s: dict = Depends(require_owner)):
     session = session_service.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -388,7 +390,7 @@ async def start_generation(session_id: str):
 
 
 @router.get("/{session_id}/generate/status")
-async def stream_progress(session_id: str, request: Request):
+async def stream_progress(session_id: str, request: Request, _s: dict = Depends(require_readable)):
     async def event_stream() -> AsyncIterator[bytes]:
         session = session_service.get_by_id(session_id)
         if not session or session.get("status") in ("ready", "error"):

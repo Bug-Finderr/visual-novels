@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const GENRES = [
   'Fantasy', 'Sci-Fi', 'Romance', 'Horror', 'Mystery',
@@ -21,6 +22,7 @@ const EMPTY = {
 
 export default function Setup() {
   const navigate = useNavigate();
+  const { user, googleEnabled, login, loading } = useAuth();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +41,24 @@ export default function Setup() {
       setError(err.message || 'Something went wrong.');
       setSubmitting(false);
     }
+  }
+
+  if (!loading && !user) {
+    return (
+      <div className="page page--narrow">
+        <Link to="/" className="back-link">← Back</Link>
+        <div className="page-head">
+          <span className="eyebrow">Create</span>
+          <h1 className="display">Author a new tale</h1>
+          <p>Sign in to author and keep your own tales.</p>
+        </div>
+        <div className="panel" style={{ textAlign: 'center', padding: '2.5rem' }}>
+          <button className="btn btn-primary btn-lg" onClick={login} disabled={!googleEnabled}>
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
