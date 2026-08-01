@@ -101,8 +101,24 @@ _LOW_PITCH_WORDS = (
 )
 
 
+# Explicit F0/timbre cues take precedence over energy/delivery adjectives —
+# a "deep" character is low-pitched even if also described as, say, energetic.
+_DEEP_WORDS = (
+    "deep", "low pitched", "low-pitched", "bass", "baritone", "booming",
+    "rumbling", "gravelly", "sonorous", "basso", "low, resonant", "deep and resonant",
+)
+_SHRILL_WORDS = ("high pitched", "high-pitched", "squeaky", "shrill", "piping", "reedy")
+
+
 def _pitch_band(caption: str | None) -> str:
     c = (caption or "").lower()
+    deep = any(w in c for w in _DEEP_WORDS)
+    shrill = any(w in c for w in _SHRILL_WORDS)
+    if deep and not shrill:
+        return "low"
+    if shrill and not deep:
+        return "high"
+    # Fall back to energy / delivery adjectives.
     if any(w in c for w in _HIGH_PITCH_WORDS):
         return "high"
     if any(w in c for w in _LOW_PITCH_WORDS):
