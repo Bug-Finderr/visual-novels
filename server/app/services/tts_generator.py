@@ -212,6 +212,27 @@ def _short_female_description(age: str) -> str:
     return f"{_article(label)} {label} woman with a clear, expressive voice."
 
 
+# Accent words that mean the description already commits to an accent — if any
+# are present we leave it alone; otherwise we default to an American accent.
+_ACCENT_WORDS = (
+    "accent", "american", "british", "english", "australian", "irish", "scottish",
+    "welsh", "cockney", "posh", "received pronunciation", "southern drawl",
+    "new york", "brooklyn", "boston", "texan", "midwestern",
+    "french", "german", "italian", "spanish", "russian", "japanese", "indian",
+)
+
+
+def _ensure_accent(description: str) -> str:
+    """Default every voice to an American accent unless the description already
+    specifies one (the story/voice_caption wins if it names a different accent)."""
+    d = (description or "").strip()
+    if not d:
+        return "American accent."
+    if any(w in d.lower() for w in _ACCENT_WORDS):
+        return d
+    return f"{d}{'' if d.endswith('.') else '.'} American accent."
+
+
 def _default_description(caption: str | None, gender: str, age: str) -> str:
     """The character's stable, per-session default voice description.
 
@@ -225,8 +246,8 @@ def _default_description(caption: str | None, gender: str, age: str) -> str:
         # Truncate runaway captions so the per-line description doesn't
         # balloon — Mulberry steers fine on a sentence; multi-paragraph
         # captions just dilute the signal.
-        return cap[:240]
-    return (
+        return _ensure_accent(cap[:240])
+    return _ensure_accent(
         _short_female_description(age) if gender == "female"
         else _short_male_description(age)
     )
