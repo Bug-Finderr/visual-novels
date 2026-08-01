@@ -9,21 +9,16 @@ export default function Library() {
   const qc = useQueryClient();
   const { user, login, googleEnabled } = useAuth();
 
-  // Signed in → your own stories (+ claimable legacy count). Anonymous → all.
+  // Signed in → your own stories. Anonymous → the shared dev view of all.
   const query = useQuery({
     queryKey: user ? ['library', user.id] : ['sessions'],
     queryFn: () => (user ? api.get('/v1/library') : api.get('/sessions')),
   });
 
   const stories = user ? (query.data?.stories || []) : (query.data || []);
-  const ownerlessCount = user ? (query.data?.ownerlessCount || 0) : 0;
 
   const del = useMutation({
     mutationFn: (id) => api.delete(`/sessions/${id}`),
-    onSuccess: () => qc.invalidateQueries(),
-  });
-  const claim = useMutation({
-    mutationFn: () => api.post('/v1/library/claim', {}),
     onSuccess: () => qc.invalidateQueries(),
   });
 
@@ -42,22 +37,6 @@ export default function Library() {
         <h1 className="display">Your tales</h1>
         <p>Everything you've woven. Pick up where you left off, or start something new.</p>
       </div>
-
-      {user && ownerlessCount > 0 && (
-        <div className="banner">
-          <span className="badge badge-generating">{ownerlessCount}</span>
-          There {ownerlessCount === 1 ? 'is' : 'are'} {ownerlessCount} unclaimed{' '}
-          {ownerlessCount === 1 ? 'tale' : 'tales'} from before accounts existed.
-          <span className="spacer" />
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={() => claim.mutate()}
-            disabled={claim.isPending}
-          >
-            {claim.isPending ? 'Claiming…' : 'Claim them'}
-          </button>
-        </div>
-      )}
 
       {!user && googleEnabled && (
         <div className="banner">
