@@ -70,19 +70,26 @@ def _audio_key_for(script_string: str) -> str:
 
 # --- voice profiles -------------------------------------------------------
 
-# Mulberry preset speakers — empirically all four are female-presenting
-# studio voices, but speaker_1 is the cleanest / most reliably female. All
-# female characters use speaker_1; distinctness across multiple female cast
-# members comes from age-based pitch offset + per-character jitter, not
-# from rotating through speaker_2/3/4 (which can wobble in gender perception).
-DEFAULT_FEMALE_SPEAKER = "speaker_1"
+# Mulberry named studio speakers (rumik.ai): 8 female, 4 male. Each character
+# is assigned one deterministically by gender (same id -> same voice; distinct
+# cast members -> distinct voices), and the name is passed to the Silk API.
+FEMALE_SPEAKERS = ["emma", "mia", "sophia", "ava", "ira", "siya", "aisha", "zoya"]
+MALE_SPEAKERS = ["lucas", "noah", "theo", "adam"]
 
-# Narrator is description-only (no preset) — Mulberry steers a stable warm
-# male voice from the short description. One sentence is enough.
+
+def _pick_speaker(gender: str, h: int) -> str:
+    """Male -> one of the 4 male voices; female (and neutral/unknown, defaulted)
+    -> one of the 8 female voices."""
+    if gender == "male":
+        return MALE_SPEAKERS[h % len(MALE_SPEAKERS)]
+    return FEMALE_SPEAKERS[h % len(FEMALE_SPEAKERS)]
+
+
+# Narrator uses a stable warm male voice.
 NARRATOR_PROFILE = {
-    "speaker": None,
-    "f0_up_key": -3,
-    "description": "Calm middle-aged male narrator, low warm voice.",
+    "speaker": "noah",
+    "f0_up_key": -2,
+    "description": "Calm middle-aged male narrator, low warm voice. American accent.",
 }
 
 # Per-line delta layered ON TOP of the character's stable default description.
@@ -265,12 +272,11 @@ def _character_profile(
     `_compose_description` when the line is synthesized; we never change
     the character's underlying voice prompt mid-session.
 
-    - Female -> fixed `speaker_1` preset + age-based pitch + jitter +
-      voice_caption as description (the description also helps Mulberry
-      tune delivery / inflection on top of the preset's timbre).
-    - Male / neutral / unknown -> description-only (no preset speaker) so
-      the free-form description drives the timbre. Downward pitch shift
-      keeps males clearly below the female preset.
+    - A named speaker is chosen by gender (male -> 4 male voices; female /
+      neutral -> 8 female voices), deterministic per character_id so the same
+      character always sounds the same and distinct cast members differ.
+    - Pitch (f0_up_key) adds age variety + a small per-character jitter on top.
+    - The description defaults to an American accent (see `_ensure_accent`).
     """
     g = (gender or "").lower().strip()
     if g not in {"female", "male", "neutral"}:
@@ -280,19 +286,12 @@ def _character_profile(
     base = _AGE_BASE[age]
     h = _stable_int(character_id)
     jitter = ((h >> 4) % 3) - 1   # -1..+1
-    description = _default_description(caption, g, age)
-
-    if g == "female":
-        pitch = max(-12, min(12, base + jitter))
-        return {
-            "speaker": DEFAULT_FEMALE_SPEAKER,
-            "f0_up_key": pitch,
-            "description": description,
-        }
-
-    gender_shift = -5 if g == "male" else -2
-    pitch = max(-12, min(12, base + gender_shift + jitter))
-    return {"speaker": None, "f0_up_key": pitch, "description": description}
+    pitch = max(-12, min(12, base + jitter))
+    return {
+        "speaker": _pick_speaker(g, h),
+        "f0_up_key": pitch,
+        "description": _default_description(caption, g, age),
+    }
 
 
 def _compose_description(base: str | None, expression: str | None) -> str | None:
