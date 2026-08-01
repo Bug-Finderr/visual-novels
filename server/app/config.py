@@ -56,6 +56,34 @@ class Config:
     # Optional LLM semantic critic in the Memory gate (structural checks always
     # run). Off by default to keep generation deterministic and fast.
     STORYGRAPH_LLM_CRITIC: bool = _bool_env("STORYGRAPH_LLM_CRITIC", False)
+
+    # --- Phase 1: persistence + accounts / auth -------------------------
+    # Postgres for multi-user. Defaults to the local docker-compose DB.
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql+psycopg://storyplex:storyplex@localhost:5432/storyplex",
+    )
+    # Google OAuth (owner-provided). Login is disabled until these are set.
+    GOOGLE_CLIENT_ID: str | None = os.getenv("GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET: str | None = os.getenv("GOOGLE_CLIENT_SECRET")
+    GOOGLE_REDIRECT_URI: str = os.getenv(
+        "GOOGLE_REDIRECT_URI",
+        "http://localhost:3001/api/v1/auth/google/callback",
+    )
+    # Secret for signing the opaque server-session cookie. MUST be overridden
+    # in production.
+    SESSION_SECRET: str = os.getenv("SESSION_SECRET", "dev-insecure-change-me")
+    SESSION_COOKIE: str = os.getenv("SESSION_COOKIE", "storyplex_session")
+    SESSION_TTL_DAYS: int = _int_env("SESSION_TTL_DAYS", 30)
+    # Credentialed-CORS allowlist (comma-separated). Where the SPA is served.
+    ALLOWED_ORIGINS: tuple[str, ...] = tuple(
+        o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()
+    )
+
+    @property
+    def google_oauth_enabled(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET)
+
     models: Models = field(default_factory=Models)
 
 

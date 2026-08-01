@@ -1,0 +1,27 @@
+# Local Postgres for StoryPlex development.
+#   docker compose up -d db      # start
+#   docker compose down          # stop (keeps data in the named volume)
+#   docker compose down -v       # stop + wipe the database
+#
+# The backend reads DATABASE_URL (see .env.example); it defaults to this DB.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: storyplex-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: storyplex
+      POSTGRES_PASSWORD: storyplex
+      POSTGRES_DB: storyplex
+    ports:
+      - "5432:5432"
+    volumes:
+      - storyplex-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storyplex -d storyplex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  storyplex-pgdata:
