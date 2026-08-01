@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeContext.jsx';
 import { useAuth } from '../auth/AuthContext.jsx';
+import Avatar from '../components/Avatar.jsx';
 
 const MODES = ['light', 'dark', 'system'];
 
@@ -68,9 +69,7 @@ export default function Settings() {
           <div className="panel">
             <div className="row" style={{ gap: '1rem' }}>
               <div className="user-avatar user-avatar--lg" aria-hidden="true">
-                {user.avatarUrl
-                  ? <img src={user.avatarUrl} alt="" />
-                  : <span>{(user.displayName || user.username || '?').charAt(0).toUpperCase()}</span>}
+                <Avatar url={user.avatarUrl} name={user.displayName || user.username} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="setting-label">{user.displayName || user.username}</div>

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth.deps import optional_user
 from app.models.schemas import SessionCreateRequest, SessionPatchRequest
 from app.services import session_service
 
@@ -7,8 +8,8 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 @router.post("", status_code=201)
-def create_session(payload: SessionCreateRequest):
-    return session_service.create(payload.model_dump())
+def create_session(payload: SessionCreateRequest, user: dict | None = Depends(optional_user)):
+    return session_service.create(payload.model_dump(), owner_id=(user["id"] if user else None))
 
 
 @router.get("")

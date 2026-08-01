@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import Avatar from './Avatar.jsx';
 
 export default function UserMenu() {
   const { user, logout } = useAuth();
@@ -21,7 +22,6 @@ export default function UserMenu() {
 
   if (!user) return null;
   const label = user.displayName || user.username || '?';
-  const initial = label.trim().charAt(0).toUpperCase();
 
   return (
     <div className="theme-menu" ref={ref}>
@@ -32,7 +32,7 @@ export default function UserMenu() {
         aria-expanded={open}
         title={label}
       >
-        {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : <span>{initial}</span>}
+        <Avatar url={user.avatarUrl} name={label} />
       </button>
       {open && (
         <div className="theme-pop card" role="menu" style={{ width: 224 }}>

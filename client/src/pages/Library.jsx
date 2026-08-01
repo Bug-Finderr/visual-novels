@@ -3,26 +3,37 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
 import StoryCard from '../components/StoryCard.jsx';
 import { routeForStory } from './Landing.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 export default function Library() {
   const qc = useQueryClient();
-  const { data: sessions = [], isLoading, isError, error } = useQuery({
-    queryKey: ['sessions'],
-    queryFn: () => api.get('/sessions'),
+  const { user, login, googleEnabled } = useAuth();
+
+  // Signed in → your own stories (+ claimable legacy count). Anonymous → all.
+  const query = useQuery({
+    queryKey: user ? ['library', user.id] : ['sessions'],
+    queryFn: () => (user ? api.get('/v1/library') : api.get('/sessions')),
   });
+
+  const stories = user ? (query.data?.stories || []) : (query.data || []);
+  const ownerlessCount = user ? (query.data?.ownerlessCount || 0) : 0;
 
   const del = useMutation({
     mutationFn: (id) => api.delete(`/sessions/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions'] }),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+  const claim = useMutation({
+    mutationFn: () => api.post('/v1/library/claim', {}),
+    onSuccess: () => qc.invalidateQueries(),
   });
 
   const onDelete = (story) => (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (window.confirm('Delete this tale? This cannot be undone.')) {
-      del.mutate(story.id);
-    }
+    if (window.confirm('Delete this tale? This cannot be undone.')) del.mutate(story.id);
   };
+
+  const { isLoading, isError, error } = query;
 
   return (
     <div className="page">
@@ -32,11 +43,36 @@ export default function Library() {
         <p>Everything you've woven. Pick up where you left off, or start something new.</p>
       </div>
 
+      {user && ownerlessCount > 0 && (
+        <div className="banner">
+          <span className="badge badge-generating">{ownerlessCount}</span>
+          There {ownerlessCount === 1 ? 'is' : 'are'} {ownerlessCount} unclaimed{' '}
+          {ownerlessCount === 1 ? 'tale' : 'tales'} from before accounts existed.
+          <span className="spacer" />
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => claim.mutate()}
+            disabled={claim.isPending}
+          >
+            {claim.isPending ? 'Claiming…' : 'Claim them'}
+          </button>
+        </div>
+      )}
+
+      {!user && googleEnabled && (
+        <div className="banner">
+          <span className="badge badge-created">tip</span>
+          Sign in to keep your tales in your own library.
+          <span className="spacer" />
+          <button className="btn btn-sm" onClick={login}>Sign in</button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="empty"><div className="dots"><span /><span /><span /></div></div>
       ) : isError ? (
         <div className="form-error">Couldn't load your library: {error.message}</div>
-      ) : sessions.length === 0 ? (
+      ) : stories.length === 0 ? (
         <div className="empty">
           <p>The shelves are empty. Begin a new tale.</p>
           <Link to="/create" className="btn btn-primary btn-lg">
@@ -45,7 +81,7 @@ export default function Library() {
         </div>
       ) : (
         <div className="grid-cards">
-          {sessions.map((s) => (
+          {stories.map((s) => (
             <StoryCard key={s.id} story={s} to={routeForStory(s)} onDelete={onDelete(s)} />
           ))}
         </div>

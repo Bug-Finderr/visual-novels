@@ -59,9 +59,9 @@ def create(session: dict) -> None:
         conn.execute(
             """
             INSERT INTO sessions (id, title, status, setup_genre, setup_art_style, setup_setting,
-                setup_protagonist_name, setup_protagonist_personality, setup_tone, setup_premise)
+                setup_protagonist_name, setup_protagonist_personality, setup_tone, setup_premise, owner_id)
             VALUES (:id, :title, :status, :setup_genre, :setup_art_style, :setup_setting,
-                :setup_protagonist_name, :setup_protagonist_personality, :setup_tone, :setup_premise)
+                :setup_protagonist_name, :setup_protagonist_personality, :setup_tone, :setup_premise, :owner_id)
             """,
             session,
         )
@@ -90,6 +90,35 @@ def get_all() -> list[dict]:
             """
         ).fetchall()
     return rows_to_list(rows)
+
+
+def get_for_owner(owner_id: str) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
+              created_at, updated_at, last_played_at,
+              parent_session_id, chapter_number
+            FROM sessions WHERE owner_id = ? ORDER BY updated_at DESC
+            """,
+            (owner_id,),
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def count_ownerless() -> int:
+    with db() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM sessions WHERE owner_id IS NULL").fetchone()
+    return int(row["n"]) if row else 0
+
+
+def claim_ownerless(owner_id: str) -> int:
+    """Assign every unowned story to `owner_id`. Returns how many were claimed."""
+    n = count_ownerless()
+    if n:
+        with db() as conn:
+            conn.execute("UPDATE sessions SET owner_id = ? WHERE owner_id IS NULL", (owner_id,))
+    return n
 
 
 def get_by_id(session_id: str) -> dict | None:
