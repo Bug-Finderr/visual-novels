@@ -10,7 +10,7 @@ from app.auth.router import router as auth_router
 from app.config import config
 from app.db.database import init_database
 from app.logger import logger
-from app.routes import assets, gameplay, generation, library, saves, sessions, tts_stream
+from app.routes import assets, gameplay, generation, library, saves, sessions, social, tts_stream
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(library.router)
+app.include_router(social.router)
 app.include_router(sessions.router)
 app.include_router(generation.router)
 app.include_router(gameplay.router)

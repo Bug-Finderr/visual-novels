@@ -13,9 +13,9 @@ def create_session(payload: SessionCreateRequest, user: dict = Depends(get_curre
 
 
 @router.get("")
-def list_sessions():
+def list_sessions(sort: str = "new"):
     # Public feed only. A user's own stories come from GET /api/v1/library.
-    return session_service.list_public()
+    return session_service.list_public(sort)
 
 
 @router.get("/{session_id}")

@@ -209,3 +209,36 @@ class Playthrough(Base):
     last_played_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
     __table_args__ = (UniqueConstraint("user_id", "story_id", name="uq_playthrough_user_story"),)
+
+
+# ======================================================================
+# Social graph (Phase 4) — reactions on published stories.
+# Denormalized counters live on sessions (like_count / rating_* / comment_count).
+# ======================================================================
+class Like(Base):
+    __tablename__ = "likes"
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class Rating(Base):
+    __tablename__ = "ratings"
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True)
+    score = Column(Integer, nullable=False)  # 1..5
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id = Column(String, primary_key=True, default=_uuid)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    parent_comment_id = Column(String, ForeignKey("comments.id", ondelete="CASCADE"))
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    deleted_at = Column(DateTime)
+    __table_args__ = (Index("idx_comments_session_created", "session_id", "created_at"),)

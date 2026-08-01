@@ -58,8 +58,8 @@ def get_all() -> list[dict]:
     return session_queries.get_all()
 
 
-def list_public() -> list[dict]:
-    return session_queries.get_public()
+def list_public(sort: str = "new") -> list[dict]:
+    return session_queries.get_public(sort)
 
 
 def list_for_owner(owner_id: str) -> list[dict]:

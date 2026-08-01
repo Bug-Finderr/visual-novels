@@ -92,17 +92,50 @@ def get_all() -> list[dict]:
     return rows_to_list(rows)
 
 
-def get_public() -> list[dict]:
+# Card columns shared by the public feed + story detail (joins the author).
+_CARD_COLS = """
+    s.id, s.title, s.status, s.setup_genre, s.setup_art_style, s.setup_tone,
+    s.created_at, s.updated_at, s.published_at, s.chapter_number, s.visibility,
+    s.like_count, s.comment_count, s.play_count, s.rating_sum, s.rating_count,
+    u.username AS author_username, u.display_name AS author_name,
+    u.avatar_url AS author_avatar, s.owner_id AS author_id
+"""
+
+_PUBLIC_SORTS = {
+    "new": "s.published_at DESC NULLS LAST, s.updated_at DESC",
+    "top": "s.like_count DESC, s.updated_at DESC",
+    "rated": "(CASE WHEN s.rating_count > 0 THEN CAST(s.rating_sum AS float) / s.rating_count ELSE 0 END) DESC, s.rating_count DESC",
+    "played": "s.play_count DESC, s.updated_at DESC",
+}
+
+
+def get_public(sort: str = "new", limit: int = 60) -> list[dict]:
+    order = _PUBLIC_SORTS.get(sort, _PUBLIC_SORTS["new"])
     with db() as conn:
         rows = conn.execute(
-            """
-            SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
-              created_at, updated_at, last_played_at,
-              parent_session_id, chapter_number
-            FROM sessions WHERE visibility = 'public' ORDER BY updated_at DESC
+            f"""
+            SELECT {_CARD_COLS}
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.visibility = 'public'
+            ORDER BY {order}
+            LIMIT {int(limit)}
             """
         ).fetchall()
     return rows_to_list(rows)
+
+
+def get_card(session_id: str) -> dict | None:
+    """A single story's card-level metadata + author + counts (for detail)."""
+    with db() as conn:
+        row = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}, s.setup_setting, s.setup_premise, s.world_lore
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+    return row_to_dict(row)
 
 
 def get_for_owner(owner_id: str) -> list[dict]:
@@ -111,7 +144,8 @@ def get_for_owner(owner_id: str) -> list[dict]:
             """
             SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
               created_at, updated_at, last_played_at,
-              parent_session_id, chapter_number, visibility, published_at
+              parent_session_id, chapter_number, visibility, published_at,
+              like_count, comment_count, play_count, rating_sum, rating_count
             FROM sessions WHERE owner_id = ? ORDER BY updated_at DESC
             """,
             (owner_id,),
