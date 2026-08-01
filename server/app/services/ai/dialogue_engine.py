@@ -33,22 +33,23 @@ from app.services.ai.prompts.beat_expansion import (
     build_beat_system_prompt,
     build_ending_full_prompt,
 )
+from app.db.queries import playthroughs as pt_queries
 
 
 # ---------- session context -------------------------------------------------
 
-def _load_session_context(session_id: str) -> dict:
+def _load_session_context(session_id: str, playthrough: dict | None = None) -> dict:
     session = session_queries.get_by_id(session_id)
     if not session:
         raise ValueError(f"Session {session_id} not found")
+    pt = playthrough or {}
 
     chars = []
     for c in character_queries.get_by_session(session_id):
         chars.append({**c, "quirks": json.loads(c.get("quirks") or "[]")})
 
-    current_scene = None
-    if session.get("current_scene_id"):
-        current_scene = scene_queries.get_by_id(session_id, session["current_scene_id"])
+    scene_id = pt.get("current_scene_id") or session.get("current_scene_id")
+    current_scene = scene_queries.get_by_id(session_id, scene_id) if scene_id else None
 
     scenes = scene_queries.get_by_session(session_id)
 
@@ -59,13 +60,14 @@ def _load_session_context(session_id: str) -> dict:
         "plotArc": json.loads(session.get("plot_arc") or "{}"),
         "storySpine": json.loads(session.get("story_spine") or "[]"),
         "endings": json.loads(session.get("endings") or "[]"),
-        "alignmentState": json.loads(session.get("alignment_state") or "{}"),
-        "currentBeatIndex": session.get("current_beat_index") or 0,
-        "chosenEndingId": session.get("chosen_ending_id"),
+        "alignmentState": json.loads(pt.get("alignment_state") or session.get("alignment_state") or "{}"),
+        "currentBeatIndex": pt.get("current_beat_index") if pt.get("current_beat_index") is not None else (session.get("current_beat_index") or 0),
+        "chosenEndingId": pt.get("chosen_ending_id") or session.get("chosen_ending_id"),
         "currentScene": current_scene,
         "protagonistName": session["setup_protagonist_name"],
         "tone": session["setup_tone"],
-        "currentLabel": session.get("current_label"),
+        "currentLabel": pt.get("current_label") or session.get("current_label"),
+        "playthroughId": pt.get("id"),
         # Engine that generated this story — drives free-input handling so it
         # stays consistent regardless of the live STORYGEN_ENGINE flag.
         "storygenEngine": session.get("storygen_engine") or "monolith",
@@ -119,7 +121,7 @@ def _pick_chosen_ending(endings: list[dict], alignment_state: dict) -> dict | No
 
 
 def _apply_choice_alignment(
-    session_id: str,
+    playthrough_id: str,
     alignment_state: dict,
     endings: list[dict],
     chosen_choice: dict | None,
@@ -139,7 +141,7 @@ def _apply_choice_alignment(
         return alignment_state
     alignment_state = dict(alignment_state)
     alignment_state[target_id] = alignment_state.get(target_id, 0) + magnitude
-    session_queries.update_alignment(session_id, alignment_state)
+    pt_queries.update_alignment(playthrough_id, alignment_state)
     return alignment_state
 
 
@@ -354,7 +356,7 @@ def pre_expand_remaining_beats(
 
 # ---------- main entry ------------------------------------------------------
 
-def process_player_action(session_id: str, action: dict) -> dict:
+def process_player_action(session_id: str, action: dict, playthrough: dict) -> dict:
     """Resolve the player's action to the next chunk of story.
 
     Fast paths (no LLM call):
@@ -366,7 +368,8 @@ def process_player_action(session_id: str, action: dict) -> dict:
       - final beat: always live (ending depends on alignment_state).
       - cache miss: fall back to live full-beat LLM call (and cache the result).
     """
-    ctx = _load_session_context(session_id)
+    ctx = _load_session_context(session_id, playthrough)
+    playthrough_id = playthrough["id"]
     spine: list[dict] = ctx["storySpine"]
     endings: list[dict] = ctx["endings"]
     alignment_state: dict = ctx["alignmentState"] or {}
@@ -393,7 +396,7 @@ def process_player_action(session_id: str, action: dict) -> dict:
     # ----- Choice: apply alignment first, then move to next beat.
     if action_type == "choice":
         alignment_state = _apply_choice_alignment(
-            session_id, alignment_state, endings,
+            playthrough_id, alignment_state, endings,
             {
                 "alignmentTag": action.get("alignmentTag"),
                 "magnitude": action.get("magnitude"),
@@ -411,7 +414,7 @@ def process_player_action(session_id: str, action: dict) -> dict:
     if is_final:
         chosen_ending = _pick_chosen_ending(endings, alignment_state)
         if chosen_ending:
-            session_queries.set_chosen_ending(session_id, chosen_ending["id"])
+            pt_queries.set_chosen_ending(playthrough_id, chosen_ending["id"])
         statements: list[dict] = []
         if chosen_ending:
             cached_ending = ending_dialogue_queries.get(session_id, chosen_ending["id"])
@@ -432,7 +435,7 @@ def process_player_action(session_id: str, action: dict) -> dict:
         if chosen_ending and chosen_ending.get("finalSceneId"):
             statements = _ensure_scene_change(statements, chosen_ending["finalSceneId"])
         if target_index != beat_index:
-            session_queries.advance_beat(session_id, target_index)
+            pt_queries.advance_beat(playthrough_id, target_index)
         _log_history(session_id, ctx, action_type, action, "[FINAL BEAT]")
         return {
             "statements": statements,
@@ -487,7 +490,7 @@ def process_player_action(session_id: str, action: dict) -> dict:
     all_char_ids = [c["id"] for c in (ctx.get("characters") or [])]
     statements = _ensure_cast(statements, target_beat.get("castIds"), all_char_ids)
     if target_index != beat_index:
-        session_queries.advance_beat(session_id, target_index)
+        pt_queries.advance_beat(playthrough_id, target_index)
 
     _log_history(session_id, ctx, action_type, action,
                  f"[BEAT {target_index} → {len(statements)} statements]")

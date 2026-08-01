@@ -3,17 +3,18 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.auth.deps import require_owner, require_readable
+from app.auth.deps import get_current_user, require_readable
+from app.db.queries import playthroughs as pt_queries
 from app.db.queries import sessions as session_queries
 from app.logger import logger
 from app.models.schemas import AdvanceRequest, ChoiceRequest, FreeInputRequest, GameplayResponse
-from app.services import script_builder, session_service, tts_generator
+from app.services import playthrough_service, script_builder, session_service, tts_generator
 from app.services.ai import dialogue_engine
 
 router = APIRouter(prefix="/api/sessions", tags=["gameplay"])
 
 
-def _process_ai_response(session_id: str, ai_output: dict) -> dict:
+def _process_ai_response(session_id: str, ai_output: dict, playthrough_id: str) -> dict:
     session = session_service.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -27,7 +28,7 @@ def _process_ai_response(session_id: str, ai_output: dict) -> dict:
     for name, stmts in extra_labels.items():
         script_builder.save_label(session_id, name, stmts)
 
-    session_queries.update_current_label(session_id, label_name)
+    pt_queries.update_current_label(playthrough_id, label_name)
 
     # Synthesize voice for the new dialogue lines (stream + cache via Mulberry).
     audio_manifest: dict[str, str] = {}
@@ -40,10 +41,10 @@ def _process_ai_response(session_id: str, ai_output: dict) -> dict:
 
     # Surface beat / ending / alignment state so the client can update its UI
     # and build save snapshots.
-    fresh = session_queries.get_by_id(session_id) or {}
+    fresh = pt_queries.get_by_id(playthrough_id) or {}
     chosen_ending = None
     if fresh.get("chosen_ending_id"):
-        endings = json.loads(fresh.get("endings") or "[]")
+        endings = json.loads(session.get("endings") or "[]")
         chosen_ending = next(
             (e for e in endings if e.get("id") == fresh["chosen_ending_id"]),
             None,
@@ -64,8 +65,14 @@ def _process_ai_response(session_id: str, ai_output: dict) -> dict:
 
 
 @router.post("/{session_id}/choice", response_model=GameplayResponse)
-async def handle_choice(session_id: str, payload: ChoiceRequest, _s: dict = Depends(require_owner)):
+async def handle_choice(
+    session_id: str,
+    payload: ChoiceRequest,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
     try:
+        pt = playthrough_service.get_or_create(user["id"], session_id)
         ai_output = await asyncio.to_thread(
             dialogue_engine.process_player_action,
             session_id,
@@ -76,8 +83,9 @@ async def handle_choice(session_id: str, payload: ChoiceRequest, _s: dict = Depe
                 "alignmentTag": payload.alignmentTag,
                 "magnitude": payload.magnitude,
             },
+            pt,
         )
-        result = await asyncio.to_thread(_process_ai_response, session_id, ai_output)
+        result = await asyncio.to_thread(_process_ai_response, session_id, ai_output, pt["id"])
         return result
     except HTTPException:
         raise
@@ -87,14 +95,21 @@ async def handle_choice(session_id: str, payload: ChoiceRequest, _s: dict = Depe
 
 
 @router.post("/{session_id}/free-input", response_model=GameplayResponse)
-async def handle_free_input(session_id: str, payload: FreeInputRequest, _s: dict = Depends(require_owner)):
+async def handle_free_input(
+    session_id: str,
+    payload: FreeInputRequest,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
     try:
+        pt = playthrough_service.get_or_create(user["id"], session_id)
         ai_output = await asyncio.to_thread(
             dialogue_engine.process_player_action,
             session_id,
             {"type": "free-input", "text": payload.text},
+            pt,
         )
-        result = await asyncio.to_thread(_process_ai_response, session_id, ai_output)
+        result = await asyncio.to_thread(_process_ai_response, session_id, ai_output, pt["id"])
         return result
     except HTTPException:
         raise
@@ -105,16 +120,21 @@ async def handle_free_input(session_id: str, payload: FreeInputRequest, _s: dict
 
 @router.post("/{session_id}/advance", response_model=GameplayResponse)
 async def handle_advance(
-    session_id: str, _payload: AdvanceRequest | None = None, _s: dict = Depends(require_owner)
+    session_id: str,
+    _payload: AdvanceRequest | None = None,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
 ):
     """No-choice continue: opening script ran out, just expand the current beat."""
     try:
+        pt = playthrough_service.get_or_create(user["id"], session_id)
         ai_output = await asyncio.to_thread(
             dialogue_engine.process_player_action,
             session_id,
             {"type": "advance", "text": ""},
+            pt,
         )
-        result = await asyncio.to_thread(_process_ai_response, session_id, ai_output)
+        result = await asyncio.to_thread(_process_ai_response, session_id, ai_output, pt["id"])
         return result
     except HTTPException:
         raise
