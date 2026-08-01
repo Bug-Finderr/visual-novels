@@ -1,29 +1,22 @@
-"""Save / Load / Restart routes — Ren'Py-style checkpointing.
+"""Save / Load / Restart routes — per-user playthrough checkpoints.
 
-The client builds a SaveSnapshot from its in-game state (label, statement
-index, scene, visible characters) and POSTs it here. On load, we read it back
-and the client uses it to rebuild the stage and resume reading. Restart wipes
-the spine progress, audio cache, and runtime-generated labels so the session
-plays from beat 0 again.
+Saves and restart operate on the CALLER's own playthrough of the story, so a
+player of a public story never touches the author's content or another player's
+progress. The client builds a SaveSnapshot from its in-game state and POSTs it;
+on load it reads it back to rebuild the stage. Restart resets the caller's
+playthrough to the opening (shared cached beats/audio are untouched).
 """
 from __future__ import annotations
 
-import json
-import shutil
-from typing import Any
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.config import config
-from app.db.database import db
-from app.db.queries import beat_expansions as beat_expansions_queries
+from app.auth.deps import get_current_user, require_readable
+from app.db.queries import playthroughs as pt_queries
 from app.db.queries import saves as save_queries
-from app.db.queries import sessions as session_queries
-from app.logger import logger
-from app.services import session_service
+from app.services import playthrough_service
 
-router = APIRouter(prefix="/api/sessions", tags=["saves"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["saves"])
 
 
 class VisibleChar(BaseModel):
@@ -49,85 +42,62 @@ class CreateSaveRequest(BaseModel):
 
 
 @router.post("/{session_id}/saves")
-def create_save(session_id: str, payload: CreateSaveRequest):
-    session = session_queries.get_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    snapshot_dict = payload.snapshot.model_dump()
+def create_save(
+    session_id: str,
+    payload: CreateSaveRequest,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
+    snap = payload.snapshot.model_dump()
     if payload.slot is not None:
-        save_id = save_queries.upsert_slot(session_id, payload.slot, snapshot_dict, name=payload.name)
+        save_id = save_queries.upsert_slot(session_id, user["id"], payload.slot, snap, name=payload.name)
     else:
-        save_id = save_queries.insert(session_id, snapshot_dict, name=payload.name)
+        save_id = save_queries.insert(session_id, user["id"], snap, name=payload.name)
     return {"id": save_id, "slot": payload.slot, "name": payload.name}
 
 
 @router.get("/{session_id}/saves")
-def list_saves(session_id: str):
-    return save_queries.list_for_session(session_id)
+def list_saves(
+    session_id: str,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
+    return save_queries.list_for_session(session_id, user["id"])
 
 
 @router.get("/{session_id}/saves/{save_id}")
-def load_save(session_id: str, save_id: str):
-    save = save_queries.get(session_id, save_id)
+def load_save(
+    session_id: str,
+    save_id: str,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
+    save = save_queries.get(session_id, user["id"], save_id)
     if not save:
         raise HTTPException(status_code=404, detail="Save not found")
     return save
 
 
 @router.delete("/{session_id}/saves/{save_id}")
-def delete_save(session_id: str, save_id: str):
-    save_queries.delete(session_id, save_id)
+def delete_save(
+    session_id: str,
+    save_id: str,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
+    save_queries.delete(session_id, user["id"], save_id)
     return {"deleted": save_id}
 
 
 @router.post("/{session_id}/restart")
-def restart_session(session_id: str):
-    """Reset spine progress + drop all runtime-generated labels.
-
-    Kept: the world, characters, scenes, opening script (the 'Start' label),
-    sprites, scene backgrounds. Wiped: alignment_state, current_beat_index,
-    chosen_ending_id, runtime labels, dialogue_history, audio cache.
-    """
-    session = session_queries.get_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    with db() as conn:
-        endings = json.loads(session.get("endings") or "[]")
-        seed_alignment = {e["id"]: 0 for e in endings if e.get("id")}
-
-        conn.execute(
-            """
-            UPDATE sessions
-            SET current_label = 'Start',
-                current_beat_index = 0,
-                alignment_state = ?,
-                chosen_ending_id = NULL,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (json.dumps(seed_alignment), session_id),
-        )
-        # Drop runtime labels (anything that isn't the canonical opening 'Start').
-        conn.execute(
-            "DELETE FROM script_labels WHERE session_id = ? AND label_name != 'Start'",
-            (session_id,),
-        )
-        conn.execute("DELETE FROM dialogue_history WHERE session_id = ?", (session_id,))
-
-    # KEEP cached beat_expansions — the story content is the same, only the
-    # player's choices reset. Wiping the cache would force every beat to be
-    # re-generated by Flash 2.5 the first time the player reaches it again,
-    # which is exactly the "regenerating again and again" the player wanted
-    # to avoid. The choices the player makes still steer the ending normally.
-
-    # Wipe the audio cache too — runtime lines were generated for a particular
-    # playthrough; restart should let them regenerate fresh.
-    audio_dir = config.GENERATED_DIR / session_id / "audio"
-    if audio_dir.is_dir():
-        try:
-            shutil.rmtree(audio_dir)
-        except Exception as exc:
-            logger.warning("audio cache wipe failed: %s", exc)
-
+def restart_session(
+    session_id: str,
+    user: dict = Depends(get_current_user),
+    _s: dict = Depends(require_readable),
+):
+    """Reset THIS user's playthrough to the opening. Shared story content and
+    the cached beats/audio are left intact, so other players and the cache are
+    unaffected."""
+    pt = playthrough_service.get_or_create(user["id"], session_id)
+    pt_queries.restart(pt["id"])
     return {"status": "restarted", "sessionId": session_id}

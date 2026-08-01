@@ -1,73 +1,59 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.auth.deps import get_current_user, require_owner, require_readable
 from app.models.schemas import SessionCreateRequest, SessionPatchRequest
 from app.services import session_service
 
-router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
 
 @router.post("", status_code=201)
-def create_session(payload: SessionCreateRequest):
-    return session_service.create(payload.model_dump())
+def create_session(payload: SessionCreateRequest, user: dict = Depends(get_current_user)):
+    return session_service.create(payload.model_dump(), owner_id=user["id"])
 
 
 @router.get("")
-def list_sessions():
-    return session_service.get_all()
+def list_sessions(sort: str = "new"):
+    # Public feed only. A user's own stories come from GET /api/v1/library.
+    return session_service.list_public(sort)
 
 
 @router.get("/{session_id}")
-def get_session(session_id: str):
-    session = session_service.get_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session
+def get_session(session_id: str, _s: dict = Depends(require_readable)):
+    return session_service.get_by_id(session_id)
 
 
 @router.delete("/{session_id}")
-def delete_session(session_id: str):
-    session = session_service.get_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+def delete_session(session_id: str, _s: dict = Depends(require_owner)):
     session_service.delete(session_id)
     return {"ok": True}
 
 
 @router.patch("/{session_id}")
-def patch_session(session_id: str, payload: SessionPatchRequest):
-    session = session_service.get_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+def patch_session(
+    session_id: str, payload: SessionPatchRequest, _s: dict = Depends(require_owner)
+):
     session_service.patch(session_id, payload.model_dump(exclude_none=True))
     return {"ok": True}
 
 
 @router.get("/{session_id}/characters")
-def get_characters(session_id: str):
+def get_characters(session_id: str, _s: dict = Depends(require_readable)):
     return session_service.get_characters(session_id)
 
 
 @router.get("/{session_id}/scenes")
-def get_scenes(session_id: str):
+def get_scenes(session_id: str, _s: dict = Depends(require_readable)):
     return session_service.get_scenes(session_id)
 
 
 @router.post("/{session_id}/continue", status_code=201)
-def continue_to_next_chapter(session_id: str):
-    """Spawn a child session continuing from this one's chosen ending.
-
-    Requires the parent to have a chosen_ending_id (the player must have
-    actually reached an ending). The child has the same setup + parent
-    linkage; its generation pipeline detects the parent and runs the
-    continuation world-build prompt instead of a fresh one.
-    """
-    parent = session_service.get_by_id(session_id)
-    if not parent:
-        raise HTTPException(status_code=404, detail="Parent session not found")
+def continue_to_next_chapter(session_id: str, parent: dict = Depends(require_owner)):
+    """Spawn a child session continuing from this one's chosen ending. The child
+    inherits the owner. Requires the parent to have reached an ending."""
     if not parent.get("chosen_ending_id"):
         raise HTTPException(
             status_code=400,
             detail="Cannot continue — the previous chapter hasn't reached an ending yet.",
         )
-    child = session_service.create_continuation(parent)
-    return child
+    return session_service.create_continuation(parent)

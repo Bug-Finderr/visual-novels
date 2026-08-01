@@ -4,8 +4,10 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import AsyncIterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
+from app.auth.deps import require_owner, require_readable
 
 from app.db.queries import characters as character_queries
 from app.db.queries import scenes as scene_queries
@@ -14,7 +16,7 @@ from app.logger import logger
 from app.services import animation_generator, asset_manager, session_service, script_builder, tts_generator
 from app.services.ai import image_generator, story_generator
 
-router = APIRouter(prefix="/api/sessions", tags=["generation"])
+router = APIRouter(prefix="/api/v1/sessions", tags=["generation"])
 
 # In-memory progress store (sessionId -> dict)
 _progress: dict[str, dict] = {}
@@ -185,12 +187,37 @@ def _run_pipeline(session_id: str, session: dict) -> None:
             logger.warning("background %s failed: %s", scene["id"], err)
         _emit_image_progress("backgrounds", f"Painting background — {scene['name']}")
 
+    # Story cover key-visual — one portrait illustration of the main cast in
+    # the setting, used on story cards / library. Runs in the shared image pool
+    # so it overlaps sprite + background generation. Kept out of the progress
+    # count (it's a single bonus image) so the ratio stays clean.
+    cover_ref = next(iter(neutral_images.values()), None)
+
+    def _do_cover() -> None:
+        try:
+            cover_ctx = {
+                "title": session.get("title") or story_data.get("worldLore", {}).get("name") or "",
+                "genre": setup["genre"],
+                "tone": setup["tone"],
+                "setting": setup["setting"],
+                "protagonist": setup["protagonistName"],
+                "characters": [
+                    {"name": c["name"], "appearance": c.get("appearance", "")}
+                    for c in characters[:3]
+                ],
+            }
+            image_generator.generate_cover(session_id, cover_ctx, art_style, reference_image=cover_ref)
+            logger.info("cover generated for session %s", session_id)
+        except Exception as err:
+            logger.warning("cover generation failed: %s", err)
+
     with ThreadPoolExecutor(max_workers=_PIPELINE_WORKERS) as pool:
         futures = []
         for task in sprite_tasks:
             futures.append(pool.submit(_do_sprite, task))
         for scene in scene_tasks:
             futures.append(pool.submit(_do_scene, scene))
+        futures.append(pool.submit(_do_cover))
         for _ in as_completed(futures):
             pass
 
@@ -345,7 +372,7 @@ async def _pipeline_runner(session_id: str, session: dict) -> None:
 
 
 @router.post("/{session_id}/generate")
-async def start_generation(session_id: str):
+async def start_generation(session_id: str, _s: dict = Depends(require_owner)):
     session = session_service.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -363,7 +390,7 @@ async def start_generation(session_id: str):
 
 
 @router.get("/{session_id}/generate/status")
-async def stream_progress(session_id: str, request: Request):
+async def stream_progress(session_id: str, request: Request, _s: dict = Depends(require_readable)):
     async def event_stream() -> AsyncIterator[bytes]:
         session = session_service.get_by_id(session_id)
         if not session or session.get("status") in ("ready", "error"):

@@ -11,6 +11,7 @@ from app.services import asset_manager
 from app.services.ai.gemini_client import get_client, models
 from app.services.ai.prompts.sprite_generation import (
     build_background_prompt,
+    build_cover_prompt,
     build_overlay_prompt,
     build_sprite_prompt,
 )
@@ -259,3 +260,21 @@ def generate_neutral_only(session_id: str, character: dict, art_style: str) -> b
     image = remove_sprite_bg(image)
     asset_manager.save_character_sprite(session_id, character["id"], "neutral", image)
     return image
+
+
+def generate_cover(
+    session_id: str,
+    cover_ctx: dict,
+    art_style: str,
+    reference_image: bytes | None = None,
+) -> str:
+    """Generate the story's portrait cover key-visual and save it as cover.png.
+
+    Unlike sprites, the background is KEPT — this is a full illustration, not a
+    transparent cut-out. An optional main-character neutral sprite is passed as
+    a reference so the cover's cast stays on-model.
+    """
+    prompt = build_cover_prompt(cover_ctx, art_style, has_reference=bool(reference_image))
+    refs = [reference_image] if reference_image else []
+    image = _generate_image(prompt, refs, "3:4")
+    return str(asset_manager.save_cover(session_id, image))

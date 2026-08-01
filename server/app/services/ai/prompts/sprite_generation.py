@@ -126,3 +126,37 @@ REQUIREMENTS:
 - Suitable as a background for character sprites overlaid on top
 - Consistent lighting and color palette
 - Should feel like a real location the player can imagine being in"""
+
+
+def build_cover_prompt(ctx: dict, art_style: str, has_reference: bool = False) -> str:
+    """Portrait key-visual / poster cover for a story — the image shown on
+    story cards and the library. No text is rendered (the UI overlays titles).
+    """
+    style = STYLE_MAP.get(art_style, STYLE_MAP["anime"])
+    chars = ctx.get("characters") or []
+    if chars:
+        cast = "\n".join(f"- {c['name']}: {c.get('appearance', '')}" for c in chars[:3])
+    else:
+        cast = f"- {ctx.get('protagonist', 'the protagonist')}"
+    reference_note = (
+        "\n- The provided reference image is one of the main characters — keep that "
+        "character's face, hair, and overall design consistent with it."
+        if has_reference else ""
+    )
+    tone = ctx.get("tone", "")
+    return f"""Generate a VERTICAL cover illustration (key visual / poster) for a visual novel.
+
+STYLE: {style}; dramatic cover key-visual, cinematic composition, polished and richly detailed.
+STORY TITLE (context only — do NOT render any text): {ctx.get('title', '')}
+GENRE / MOOD: {ctx.get('genre', '')}, {tone} in tone
+SETTING: {ctx.get('setting', '')}
+FEATURED CHARACTERS:
+{cast}
+
+REQUIREMENTS:
+- Portrait / vertical 3:4 composition, like a light-novel or visual-novel cover.
+- Feature the main character(s) prominently in an evocative pose within the setting.
+- Convey the {tone} mood through lighting, color, and atmosphere.
+- Cohesive color palette, high quality, clean polished illustration.
+- Leave a little visual breathing room near the top (as if a title could sit there).
+- ABSOLUTELY NO text, letters, words, logos, signatures, or watermarks anywhere in the image.{reference_note}"""

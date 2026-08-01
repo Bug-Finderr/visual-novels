@@ -59,9 +59,9 @@ def create(session: dict) -> None:
         conn.execute(
             """
             INSERT INTO sessions (id, title, status, setup_genre, setup_art_style, setup_setting,
-                setup_protagonist_name, setup_protagonist_personality, setup_tone, setup_premise)
+                setup_protagonist_name, setup_protagonist_personality, setup_tone, setup_premise, owner_id)
             VALUES (:id, :title, :status, :setup_genre, :setup_art_style, :setup_setting,
-                :setup_protagonist_name, :setup_protagonist_personality, :setup_tone, :setup_premise)
+                :setup_protagonist_name, :setup_protagonist_personality, :setup_tone, :setup_premise, :owner_id)
             """,
             session,
         )
@@ -90,6 +90,140 @@ def get_all() -> list[dict]:
             """
         ).fetchall()
     return rows_to_list(rows)
+
+
+# Card columns shared by the public feed + story detail (joins the author).
+_CARD_COLS = """
+    s.id, s.title, s.status, s.setup_genre, s.setup_art_style, s.setup_tone,
+    s.created_at, s.updated_at, s.published_at, s.chapter_number, s.visibility,
+    s.like_count, s.comment_count, s.play_count, s.rating_sum, s.rating_count,
+    u.username AS author_username, u.display_name AS author_name,
+    u.avatar_url AS author_avatar, s.owner_id AS author_id
+"""
+
+_PUBLIC_SORTS = {
+    "new": "s.published_at DESC NULLS LAST, s.updated_at DESC",
+    "top": "s.like_count DESC, s.updated_at DESC",
+    "rated": "(CASE WHEN s.rating_count > 0 THEN CAST(s.rating_sum AS float) / s.rating_count ELSE 0 END) DESC, s.rating_count DESC",
+    "played": "s.play_count DESC, s.updated_at DESC",
+}
+
+
+def get_public(sort: str = "new", limit: int = 60) -> list[dict]:
+    order = _PUBLIC_SORTS.get(sort, _PUBLIC_SORTS["new"])
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.visibility = 'public'
+            ORDER BY {order}
+            LIMIT {int(limit)}
+            """
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def get_public_by_owner(owner_id: str, limit: int = 60) -> list[dict]:
+    """A creator's published stories (for their public profile page)."""
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.owner_id = ? AND s.visibility = 'public'
+            ORDER BY s.published_at DESC NULLS LAST, s.updated_at DESC
+            LIMIT {int(limit)}
+            """,
+            (owner_id,),
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def get_public_from_owners(owner_ids: list[str], limit: int = 60) -> list[dict]:
+    """Published stories from a set of creators — the 'Following' feed."""
+    if not owner_ids:
+        return []
+    placeholders = ", ".join(["?"] * len(owner_ids))
+    with db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.visibility = 'public' AND s.owner_id IN ({placeholders})
+            ORDER BY s.published_at DESC NULLS LAST, s.updated_at DESC
+            LIMIT {int(limit)}
+            """,
+            tuple(owner_ids),
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def get_card(session_id: str) -> dict | None:
+    """A single story's card-level metadata + author + counts (for detail)."""
+    with db() as conn:
+        row = conn.execute(
+            f"""
+            SELECT {_CARD_COLS}, s.setup_setting, s.setup_premise, s.world_lore
+            FROM sessions s LEFT JOIN users u ON u.id = s.owner_id
+            WHERE s.id = ?
+            """,
+            (session_id,),
+        ).fetchone()
+    return row_to_dict(row)
+
+
+def get_for_owner(owner_id: str) -> list[dict]:
+    with db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, title, status, setup_genre, setup_art_style, setup_tone,
+              created_at, updated_at, last_played_at,
+              parent_session_id, chapter_number, visibility, published_at,
+              like_count, comment_count, play_count, rating_sum, rating_count
+            FROM sessions WHERE owner_id = ? ORDER BY updated_at DESC
+            """,
+            (owner_id,),
+        ).fetchall()
+    return rows_to_list(rows)
+
+
+def set_visibility(session_id: str, visibility: str) -> None:
+    """Publish ('public') or unpublish ('private'/'unlisted') a story."""
+    with db() as conn:
+        if visibility == "public":
+            conn.execute(
+                """
+                UPDATE sessions
+                SET visibility = ?, published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (visibility, session_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE sessions
+                SET visibility = ?, published_at = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (visibility, session_id),
+            )
+
+
+def count_ownerless() -> int:
+    with db() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM sessions WHERE owner_id IS NULL").fetchone()
+    return int(row["n"]) if row else 0
+
+
+def claim_ownerless(owner_id: str) -> int:
+    """Assign every unowned story to `owner_id`. Returns how many were claimed."""
+    n = count_ownerless()
+    if n:
+        with db() as conn:
+            conn.execute("UPDATE sessions SET owner_id = ? WHERE owner_id IS NULL", (owner_id,))
+    return n
 
 
 def get_by_id(session_id: str) -> dict | None:

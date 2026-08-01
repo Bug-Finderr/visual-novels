@@ -1,11 +1,14 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import ThemeMenu from './ThemeMenu.jsx';
+import UserMenu from './UserMenu.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const navClass = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`;
 
 /** Site chrome (nav + footer) wrapping the standard pages. The fullscreen
  *  reader route (/play/:id) renders outside this. */
 export default function Layout() {
+  const { user, googleEnabled, login, loading } = useAuth();
   return (
     <div className="app-shell">
       <header className="nav">
@@ -22,6 +25,11 @@ export default function Layout() {
           <div className="nav-actions">
             <Link to="/create" className="btn btn-primary btn-sm">＋ New tale</Link>
             <ThemeMenu />
+            {!loading && (user
+              ? <UserMenu />
+              : (googleEnabled && (
+                  <button className="btn btn-sm" onClick={login}>Sign in</button>
+                )))}
           </div>
         </div>
       </header>

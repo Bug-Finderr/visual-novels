@@ -110,8 +110,10 @@ def save_label(session_id: str, label_name: str, statements: list) -> None:
     with db() as conn:
         conn.execute(
             """
-            INSERT OR REPLACE INTO script_labels (session_id, label_name, statements)
+            INSERT INTO script_labels (session_id, label_name, statements)
             VALUES (?, ?, ?)
+            ON CONFLICT (session_id, label_name)
+            DO UPDATE SET statements = EXCLUDED.statements
             """,
             (session_id, label_name, json.dumps(statements)),
         )

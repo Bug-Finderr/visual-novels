@@ -47,7 +47,7 @@ export default function Landing() {
           </div>
           <div className="grid-cards">
             {featured.map((s) => (
-              <StoryCard key={s.id} story={s} to={routeForStory(s)} />
+              <StoryCard key={s.id} story={s} to={`/story/${s.id}`} />
             ))}
           </div>
         </section>

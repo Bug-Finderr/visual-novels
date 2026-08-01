@@ -1,9 +1,10 @@
-const BASE = '/api';
+const BASE = '/api/v1';
 
 async function request(method, path, body = null) {
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // send the session cookie
   };
   if (body) opts.body = JSON.stringify(body);
 

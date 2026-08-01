@@ -7,7 +7,7 @@ from app.db.queries import sessions as session_queries
 from app.services import asset_manager
 
 
-def create(setup: dict) -> dict:
+def create(setup: dict, owner_id: str | None = None) -> dict:
     session_id = str(uuid4())
     title = f"{setup['genre']} - {setup['setting'][:40]}"
     session_queries.create({
@@ -21,6 +21,7 @@ def create(setup: dict) -> dict:
         "setup_protagonist_personality": setup["protagonistPersonality"],
         "setup_tone": setup["tone"],
         "setup_premise": setup.get("premise"),
+        "owner_id": owner_id,
     })
     return {"id": session_id, "title": title}
 
@@ -47,6 +48,7 @@ def create_continuation(parent: dict) -> dict:
         "setup_protagonist_personality": parent["setup_protagonist_personality"],
         "setup_tone": parent["setup_tone"],
         "setup_premise": parent.get("setup_premise"),
+        "owner_id": parent.get("owner_id"),  # chapters inherit the parent's owner
     })
     session_queries.set_chapter_parent(session_id, parent["id"], chapter_number)
     return {"id": session_id, "title": title, "chapterNumber": chapter_number}
@@ -54,6 +56,26 @@ def create_continuation(parent: dict) -> dict:
 
 def get_all() -> list[dict]:
     return session_queries.get_all()
+
+
+def list_public(sort: str = "new") -> list[dict]:
+    return session_queries.get_public(sort)
+
+
+def list_for_owner(owner_id: str) -> list[dict]:
+    return session_queries.get_for_owner(owner_id)
+
+
+def ownerless_count() -> int:
+    return session_queries.count_ownerless()
+
+
+def claim_ownerless(owner_id: str) -> int:
+    return session_queries.claim_ownerless(owner_id)
+
+
+def set_visibility(session_id: str, visibility: str) -> None:
+    session_queries.set_visibility(session_id, visibility)
 
 
 def get_by_id(session_id: str) -> dict | None:

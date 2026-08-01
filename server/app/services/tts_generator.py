@@ -70,19 +70,91 @@ def _audio_key_for(script_string: str) -> str:
 
 # --- voice profiles -------------------------------------------------------
 
-# Mulberry preset speakers — empirically all four are female-presenting
-# studio voices, but speaker_1 is the cleanest / most reliably female. All
-# female characters use speaker_1; distinctness across multiple female cast
-# members comes from age-based pitch offset + per-character jitter, not
-# from rotating through speaker_2/3/4 (which can wobble in gender perception).
-DEFAULT_FEMALE_SPEAKER = "speaker_1"
+# Mulberry named studio speakers (rumik.ai): 8 female, 4 male. Each character
+# is assigned one deterministically by gender (same id -> same voice; distinct
+# cast members -> distinct voices), and the name is passed to the Silk API.
+FEMALE_SPEAKERS = ["emma", "mia", "sophia", "ava", "ira", "siya", "aisha", "zoya"]
+MALE_SPEAKERS = ["lucas", "noah", "theo", "adam"]
+_ALL_SPEAKERS = set(FEMALE_SPEAKERS + MALE_SPEAKERS)
 
-# Narrator is description-only (no preset) — Mulberry steers a stable warm
-# male voice from the short description. One sentence is enough.
+# Trait grid: (gender, age[young|adult], pitch[low|high]) -> the matching voice.
+#   Emma  F/young/low   Mia  F/young/high   Sophia F/adult/low   Ava  F/adult/high
+#   Lucas M/young/low   Noah M/young/high   Adam   M/adult/low   Theo M/adult/high
+_TRAIT_SPEAKER = {
+    ("female", "young", "low"): "emma",  ("female", "young", "high"): "mia",
+    ("female", "adult", "low"): "sophia", ("female", "adult", "high"): "ava",
+    ("male", "young", "low"): "lucas",   ("male", "young", "high"): "noah",
+    ("male", "adult", "low"): "adam",    ("male", "adult", "high"): "theo",
+}
+# Extra female voices, used to keep same-gender cast members distinct.
+_EXTRA_FEMALE = ["ira", "siya", "zoya", "aisha"]
+
+_HIGH_PITCH_WORDS = (
+    "energetic", "lively", "bright", "excitable", "animated", "upbeat", "cheerful",
+    "bubbly", "perky", "airy", "breezy", "light", "playful", "chirpy", "spirited",
+    "peppy", "excited", "enthusiastic", "giddy", "vivacious", "high-pitched", "squeaky",
+)
+_LOW_PITCH_WORDS = (
+    "calm", "grounded", "firm", "steady", "measured", "deep", "low", "serious", "stoic",
+    "grave", "solemn", "gruff", "reserved", "stern", "informative", "quiet", "monotone",
+    "gravelly", "husky", "weary", "somber", "subdued", "low-pitched", "soft-spoken",
+)
+
+
+# Explicit F0/timbre cues take precedence over energy/delivery adjectives —
+# a "deep" character is low-pitched even if also described as, say, energetic.
+_DEEP_WORDS = (
+    "deep", "low pitched", "low-pitched", "bass", "baritone", "booming",
+    "rumbling", "gravelly", "sonorous", "basso", "low, resonant", "deep and resonant",
+)
+_SHRILL_WORDS = ("high pitched", "high-pitched", "squeaky", "shrill", "piping", "reedy")
+
+
+def _pitch_band(caption: str | None) -> str:
+    c = (caption or "").lower()
+    deep = any(w in c for w in _DEEP_WORDS)
+    shrill = any(w in c for w in _SHRILL_WORDS)
+    if deep and not shrill:
+        return "low"
+    if shrill and not deep:
+        return "high"
+    # Fall back to energy / delivery adjectives.
+    if any(w in c for w in _HIGH_PITCH_WORDS):
+        return "high"
+    if any(w in c for w in _LOW_PITCH_WORDS):
+        return "low"
+    return "low"  # grounded default
+
+
+def _age2(age: str) -> str:
+    return "young" if age in ("young", "teen", "child") else "adult"
+
+
+def _trait_speaker(gender: str, caption: str | None, age: str) -> str:
+    """Single speaker matching the character's gender + age + pitch traits."""
+    g = gender if gender in ("male", "female") else "female"  # neutral -> female pool
+    return _TRAIT_SPEAKER[(g, _age2(age), _pitch_band(caption))]
+
+
+def _assign_one(gender: str, caption: str | None, age: str, used: set) -> str:
+    """Trait-matched speaker; if already used in this cast, pick a distinct
+    alternate (extra female voices / other same-gender voices) before reuse."""
+    primary = _trait_speaker(gender, caption, age)
+    if primary not in used:
+        return primary
+    g = gender if gender in ("male", "female") else "female"
+    pool = (_EXTRA_FEMALE + FEMALE_SPEAKERS) if g == "female" else MALE_SPEAKERS
+    for alt in pool:
+        if alt not in used:
+            return alt
+    return primary  # pool exhausted -> unavoidable reuse
+
+
+# Narrator: an adult, measured male voice (Adam is described as narrator-like).
 NARRATOR_PROFILE = {
-    "speaker": None,
-    "f0_up_key": -3,
-    "description": "Calm middle-aged male narrator, low warm voice.",
+    "speaker": "adam",
+    "f0_up_key": -2,
+    "description": "Calm middle-aged male narrator, low warm voice. American accent.",
 }
 
 # Per-line delta layered ON TOP of the character's stable default description.
@@ -149,6 +221,20 @@ def _detect_age_band(caption: str | None) -> str:
     if not caption:
         return "adult"
     c = caption.lower()
+    # A stated numeric age (e.g. "apparent age 17", "16-year-old") wins over
+    # keyword cues — anime casts skew teen and often give the number directly.
+    m = re.search(r"(?:age[d]?|apparent age)\s*(\d{1,2})", c) or re.search(r"(\d{1,2})[\s-]*(?:year|yr|yo)\b", c)
+    if m:
+        n = int(m.group(1))
+        if n < 13:
+            return "child"
+        if n < 20:
+            return "teen"
+        if n < 30:
+            return "young"
+        if n < 55:
+            return "adult"
+        return "elderly"
     if any(k in c for k in (
         "elderly", "ancient", "venerable", "wizened", "aged",
         "old man", "old woman", "older man", "older woman", "older lady",
@@ -212,6 +298,27 @@ def _short_female_description(age: str) -> str:
     return f"{_article(label)} {label} woman with a clear, expressive voice."
 
 
+# Accent words that mean the description already commits to an accent — if any
+# are present we leave it alone; otherwise we default to an American accent.
+_ACCENT_WORDS = (
+    "accent", "american", "british", "english", "australian", "irish", "scottish",
+    "welsh", "cockney", "posh", "received pronunciation", "southern drawl",
+    "new york", "brooklyn", "boston", "texan", "midwestern",
+    "french", "german", "italian", "spanish", "russian", "japanese", "indian",
+)
+
+
+def _ensure_accent(description: str) -> str:
+    """Default every voice to an American accent unless the description already
+    specifies one (the story/voice_caption wins if it names a different accent)."""
+    d = (description or "").strip()
+    if not d:
+        return "American accent."
+    if any(w in d.lower() for w in _ACCENT_WORDS):
+        return d
+    return f"{d}{'' if d.endswith('.') else '.'} American accent."
+
+
 def _default_description(caption: str | None, gender: str, age: str) -> str:
     """The character's stable, per-session default voice description.
 
@@ -225,8 +332,8 @@ def _default_description(caption: str | None, gender: str, age: str) -> str:
         # Truncate runaway captions so the per-line description doesn't
         # balloon — Mulberry steers fine on a sentence; multi-paragraph
         # captions just dilute the signal.
-        return cap[:240]
-    return (
+        return _ensure_accent(cap[:240])
+    return _ensure_accent(
         _short_female_description(age) if gender == "female"
         else _short_male_description(age)
     )
@@ -236,6 +343,7 @@ def _character_profile(
     character_id: str,
     caption: str | None,
     gender: str | None = None,
+    speaker: str | None = None,
 ) -> dict:
     """Voice profile, deterministic per character_id, gender + age aware.
 
@@ -244,12 +352,11 @@ def _character_profile(
     `_compose_description` when the line is synthesized; we never change
     the character's underlying voice prompt mid-session.
 
-    - Female -> fixed `speaker_1` preset + age-based pitch + jitter +
-      voice_caption as description (the description also helps Mulberry
-      tune delivery / inflection on top of the preset's timbre).
-    - Male / neutral / unknown -> description-only (no preset speaker) so
-      the free-form description drives the timbre. Downward pitch shift
-      keeps males clearly below the female preset.
+    - A named speaker is chosen by gender (male -> 4 male voices; female /
+      neutral -> 8 female voices), deterministic per character_id so the same
+      character always sounds the same and distinct cast members differ.
+    - Pitch (f0_up_key) adds age variety + a small per-character jitter on top.
+    - The description defaults to an American accent (see `_ensure_accent`).
     """
     g = (gender or "").lower().strip()
     if g not in {"female", "male", "neutral"}:
@@ -259,19 +366,13 @@ def _character_profile(
     base = _AGE_BASE[age]
     h = _stable_int(character_id)
     jitter = ((h >> 4) % 3) - 1   # -1..+1
-    description = _default_description(caption, g, age)
-
-    if g == "female":
-        pitch = max(-12, min(12, base + jitter))
-        return {
-            "speaker": DEFAULT_FEMALE_SPEAKER,
-            "f0_up_key": pitch,
-            "description": description,
-        }
-
-    gender_shift = -5 if g == "male" else -2
-    pitch = max(-12, min(12, base + gender_shift + jitter))
-    return {"speaker": None, "f0_up_key": pitch, "description": description}
+    pitch = max(-12, min(12, base + jitter))
+    chosen = speaker if speaker in _ALL_SPEAKERS else _trait_speaker(g, caption, age)
+    return {
+        "speaker": chosen,
+        "f0_up_key": pitch,
+        "description": _default_description(caption, g, age),
+    }
 
 
 def _compose_description(base: str | None, expression: str | None) -> str | None:
@@ -295,43 +396,31 @@ def _compose_description(base: str | None, expression: str | None) -> str | None
     return f"{base_clean}. Speak {delivery}."
 
 
-def ensure_character_voice(
-    session_id: str,
-    character_id: str,
-    caption: str | None,
-    gender: str | None = None,
-) -> str | None:
-    """Compute + persist this character's voice profile repr.
-
-    The repr (e.g. 'mulberry|speaker_1|+2' or 'mulberry|desc|-4') is for
-    transparency/debugging only — the runtime synth path always recomputes
-    the profile from gender + caption + id hash, so the cached value never
-    drives playback. We refresh it on every call so the DB stays in sync
-    with the current profile algorithm even after prompt or pitch tweaks.
-    """
-    if not is_enabled():
-        return None
-    profile = _character_profile(character_id, caption, gender=gender)
-    speaker_repr = profile["speaker"] or "desc"
-    repr_str = f"{config.SILK_MODEL}|{speaker_repr}|{profile['f0_up_key']:+d}"
-    try:
-        character_queries.set_voice_id(session_id, character_id, repr_str)
-    except Exception as err:
-        logger.warning("voice profile persist failed for %s: %s", character_id, err)
-    return repr_str
-
-
 def ensure_all_character_voices(
     session_id: str,
     progress_cb: Callable[[int, int, str], None] | None = None,
 ) -> int:
+    """Assign each character a SINGLE named speaker from its traits (gender +
+    age + pitch), kept distinct within the cast where the 12-voice pool allows,
+    and persist the speaker name on the character (voice_id). Runtime + pre-gen
+    both read it back so the character always sounds the same."""
+    if not is_enabled():
+        return 0
     chars = character_queries.get_by_session(session_id)
+    used: set = set()
     done = 0
     for i, c in enumerate(chars, start=1):
-        if ensure_character_voice(
-            session_id, c["id"], c.get("voice_caption"), c.get("gender"),
-        ):
+        gender = (c.get("gender") or "").lower().strip()
+        if gender not in ("male", "female", "neutral"):
+            gender = _detect_gender(c.get("voice_caption"))
+        age = _detect_age_band(c.get("voice_caption"))
+        speaker = _assign_one(gender, c.get("voice_caption"), age, used)
+        used.add(speaker)
+        try:
+            character_queries.set_voice_id(session_id, c["id"], speaker)
             done += 1
+        except Exception as err:
+            logger.warning("speaker assign failed for %s: %s", c["id"], err)
         if progress_cb:
             progress_cb(i, len(chars), c["name"])
     return done
@@ -346,6 +435,7 @@ def _voice_meta(session_id: str) -> dict[str, dict]:
         c["id"]: {
             "caption": c.get("voice_caption"),
             "gender": c.get("gender"),
+            "speaker": c.get("voice_id"),
         }
         for c in chars
     }
@@ -520,7 +610,7 @@ def _render_lines(
         i, (script_string, speaker_id, text, expression) = idx_line
         if speaker_id:
             m = meta.get(speaker_id) or {}
-            profile = _character_profile(speaker_id, m.get("caption"), gender=m.get("gender"))
+            profile = _character_profile(speaker_id, m.get("caption"), gender=m.get("gender"), speaker=m.get("speaker"))
         else:
             profile = NARRATOR_PROFILE
 

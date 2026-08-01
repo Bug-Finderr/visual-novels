@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 
 from app.config import config
 
-router = APIRouter(prefix="/api/assets", tags=["assets"])
+router = APIRouter(prefix="/api/v1/assets", tags=["assets"])
 
 # Generated assets are content-addressed (char/expr filename, hash-named wav)
 # and never change in place. Aggressive caching eliminates the re-fetch lag
@@ -25,6 +25,16 @@ def serve_background(session_id: str, filename: str):
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Background not found")
     return FileResponse(file_path, media_type="image/png", headers=_IMMUTABLE)
+
+
+@router.get("/{session_id}/cover.png")
+def serve_cover(session_id: str):
+    file_path = config.GENERATED_DIR / session_id / "cover.png"
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Cover not found")
+    # Cover can be regenerated; allow the client to revalidate via ?v= cache-bust.
+    return FileResponse(file_path, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=3600"})
 
 
 @router.get("/{session_id}/audio/{filename}")
