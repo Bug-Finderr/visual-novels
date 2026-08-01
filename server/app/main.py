@@ -4,7 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth.router import router as auth_router
 from app.config import config
 from app.db.database import init_database
 from app.logger import logger
@@ -19,14 +21,23 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="storyplex-server", lifespan=lifespan)
 
+# Credentialed CORS against an explicit allowlist (required for cookie auth).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=list(config.ALLOWED_ORIGINS),
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Needed by Authlib to hold the OAuth state/nonce between login and callback.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SESSION_SECRET,
+    same_site="lax",
+    https_only=False,  # dev is http://localhost
+)
 
+app.include_router(auth_router)
 app.include_router(sessions.router)
 app.include_router(generation.router)
 app.include_router(gameplay.router)

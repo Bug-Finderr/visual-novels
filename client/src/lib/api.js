@@ -4,6 +4,7 @@ async function request(method, path, body = null) {
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // send the session cookie
   };
   if (body) opts.body = JSON.stringify(body);
 

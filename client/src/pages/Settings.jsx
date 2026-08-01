@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTheme } from '../theme/ThemeContext.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const MODES = ['light', 'dark', 'system'];
 
@@ -10,6 +11,7 @@ const MODES = ['light', 'dark', 'system'];
  */
 export default function Settings() {
   const { pack, setPack, mode, setMode, packs } = useTheme();
+  const { user, googleEnabled, login, logout } = useAuth();
 
   return (
     <div className="page page--narrow">
@@ -62,16 +64,41 @@ export default function Settings() {
 
       <section className="settings-section">
         <h2>Account</h2>
-        <p className="sub">Sign in to publish tales, follow creators, and sync across devices.</p>
-        <div className="panel">
-          <div className="row">
-            <div style={{ flex: 1 }}>
-              <div className="setting-label">Google sign-in</div>
-              <div className="setting-desc">Accounts &amp; creator profiles are coming next.</div>
+        {user ? (
+          <div className="panel">
+            <div className="row" style={{ gap: '1rem' }}>
+              <div className="user-avatar user-avatar--lg" aria-hidden="true">
+                {user.avatarUrl
+                  ? <img src={user.avatarUrl} alt="" />
+                  : <span>{(user.displayName || user.username || '?').charAt(0).toUpperCase()}</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="setting-label">{user.displayName || user.username}</div>
+                <div className="setting-desc">{user.email} · @{user.username}</div>
+              </div>
+              <button className="btn btn-danger" onClick={logout}>Sign out</button>
             </div>
-            <button className="btn" disabled>Coming soon</button>
           </div>
-        </div>
+        ) : (
+          <>
+            <p className="sub">Sign in to publish tales, follow creators, and sync across devices.</p>
+            <div className="panel">
+              <div className="row">
+                <div style={{ flex: 1 }}>
+                  <div className="setting-label">Google sign-in</div>
+                  <div className="setting-desc">
+                    {googleEnabled
+                      ? 'Sign in with your Google account.'
+                      : 'Not configured on this server yet.'}
+                  </div>
+                </div>
+                <button className="btn btn-primary" onClick={login} disabled={!googleEnabled}>
+                  Sign in with Google
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="settings-section">
