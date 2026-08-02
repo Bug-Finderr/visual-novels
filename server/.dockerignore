@@ -1,0 +1,21 @@
+# Local-only state — never bake into the image.
+data/
+*.db
+.env
+.env.*
+
+# Python cruft
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Editor / OS
+.DS_Store

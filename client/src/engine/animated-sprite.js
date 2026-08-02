@@ -1,3 +1,5 @@
+import { assetUrl } from '../lib/assets.js';
+
 /**
  * AnimatedSprite — a layered 2.5D character rig (Live2D-like, GPU-free).
  *
@@ -43,11 +45,11 @@ function assetVersionQuery() {
 }
 
 function baseUrl(sessionId, characterId, expression) {
-  return `/game-assets/${sessionId}/characters/${characterId}/${expression}.png${assetVersionQuery()}`;
+  return assetUrl(`${sessionId}/characters/${characterId}/${expression}.png`) + assetVersionQuery();
 }
 
 function overlayUrl(sessionId, characterId, overlay) {
-  return `/game-assets/${sessionId}/characters/${characterId}/overlay_${overlay}.png${assetVersionQuery()}`;
+  return assetUrl(`${sessionId}/characters/${characterId}/overlay_${overlay}.png`) + assetVersionQuery();
 }
 
 function preload(url) {

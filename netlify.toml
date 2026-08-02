@@ -1,0 +1,27 @@
+# Netlify config for the StoryPlex SPA (client/).
+#
+# The React app talks to the Cloud Run backend cross-origin via VITE_API_BASE
+# and loads generated images/audio from the public GCS/CDN via VITE_ASSET_BASE.
+# Set both in the Netlify UI (Site settings → Environment variables) once you
+# have the Cloud Run URL and bucket — Vite reads them at build time.
+#
+# Note: the TTS WebSocket connects DIRECTLY to Cloud Run (Netlify can't proxy
+# WebSockets), so VITE_API_BASE must be the real Cloud Run origin, not a proxy.
+
+[build]
+  base = "client"
+  command = "npm run build"
+  publish = "dist"          # relative to base → client/dist
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Set these in the Netlify UI instead of here (values are known only after
+  # the backend + bucket exist):
+  #   VITE_API_BASE   = "https://<cloud-run-url>/api/v1"
+  #   VITE_ASSET_BASE = "https://storage.googleapis.com/<bucket>"
+
+# SPA fallback — every non-asset route serves index.html for react-router.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

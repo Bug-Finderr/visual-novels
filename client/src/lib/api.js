@@ -1,4 +1,8 @@
-const BASE = '/api/v1';
+// Dev (default): '/api/v1', which Vite proxies to the backend. Prod: set
+// VITE_API_BASE to the Cloud Run origin + version, e.g.
+// https://storyplex-api-xxxx.run.app/api/v1 (the SPA on Netlify talks to
+// Cloud Run cross-origin; fetch sends credentials so the session cookie rides).
+const BASE = import.meta.env.VITE_API_BASE || '/api/v1';
 
 async function request(method, path, body = null) {
   const opts = {

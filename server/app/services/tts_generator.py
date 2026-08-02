@@ -27,7 +27,7 @@ from typing import Callable, Iterable
 from app.config import config
 from app.db.queries import characters as character_queries
 from app.logger import logger
-from app.services import silk_client
+from app.services import silk_client, storage
 
 # Mulberry rate limiting has been lifted, so per-line failure is now an
 # unusual transient (network blip / one-off server error). Short retry only.
@@ -41,16 +41,13 @@ def is_enabled() -> bool:
     return silk_client.is_enabled()
 
 
-def audio_dir(session_id: str) -> Path:
-    return config.GENERATED_DIR / session_id / "audio"
+def audio_key(session_id: str, key: str) -> str:
+    """Storage key for a synthesized line's WAV."""
+    return f"{session_id}/audio/{key}.wav"
 
 
-def audio_path(session_id: str, key: str) -> Path:
-    return audio_dir(session_id) / f"{key}.wav"
-
-
-def manifest_path(session_id: str) -> Path:
-    return audio_dir(session_id) / "manifest.json"
+def manifest_key(session_id: str) -> str:
+    return f"{session_id}/audio/manifest.json"
 
 
 def script_string_for(stmt: dict) -> str | None:
@@ -470,17 +467,21 @@ def _iter_lines(script: list[dict]) -> Iterable[tuple[str, str | None, str, str 
 
 
 def _load_manifest(session_id: str) -> dict[str, str]:
-    p = manifest_path(session_id)
-    if not p.is_file():
+    raw = storage.backend.read(manifest_key(session_id))
+    if not raw:
         return {}
     try:
-        return json.loads(p.read_text())
+        return json.loads(raw.decode("utf-8"))
     except Exception:
         return {}
 
 
 def _save_manifest(session_id: str, manifest: dict[str, str]) -> None:
-    manifest_path(session_id).write_text(json.dumps(manifest, ensure_ascii=False))
+    storage.backend.save(
+        manifest_key(session_id),
+        json.dumps(manifest, ensure_ascii=False).encode("utf-8"),
+        content_type="application/json",
+    )
 
 
 def generate_for_opening_script(
@@ -578,7 +579,7 @@ def generate_for_statements(session_id: str, statements: list[dict]) -> dict[str
     delta: dict[str, str] = {}
     for script_string, _, _, _ in lines:
         key = _audio_key_for(script_string)
-        if audio_path(session_id, key).exists():
+        if storage.backend.exists(audio_key(session_id, key)):
             delta[script_string] = f"{key}.wav"
     return delta
 
@@ -599,7 +600,6 @@ def _render_lines(
     if not lines or not is_enabled():
         return 0
     meta = _voice_meta(session_id)
-    audio_dir(session_id).mkdir(parents=True, exist_ok=True)
     manifest = _load_manifest(session_id)
     manifest_lock = threading.Lock()
     progress_lock = threading.Lock()
@@ -615,12 +615,12 @@ def _render_lines(
             profile = NARRATOR_PROFILE
 
         key = _audio_key_for(script_string)
-        out = audio_path(session_id, key)
+        akey = audio_key(session_id, key)
         wrote = False
-        if not out.exists():
+        if not storage.backend.exists(akey):
             wav = _synthesize_with_retry(text, profile, expression, line_no=i)
             if wav is not None:
-                out.write_bytes(wav)
+                storage.backend.save(akey, wav, content_type="audio/wav")
                 wrote = True
         else:
             wrote = True  # already on disk counts as success

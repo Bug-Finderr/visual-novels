@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { assetUrl } from '../lib/assets.js';
 
 function fmtDate(s) {
   if (!s) return '';
@@ -24,7 +25,7 @@ export default function StoryCard({ story, to, onDelete, onTogglePublish }) {
   const mayHaveCover = ['ready', 'playing', 'generating'].includes(story.status);
   const [coverOk, setCoverOk] = useState(mayHaveCover);
   const bust = story.updated_at ? `?v=${String(story.updated_at).replace(/\D/g, '')}` : '';
-  const coverUrl = `/game-assets/${story.id}/cover.png${bust}`;
+  const coverUrl = assetUrl(`${story.id}/cover.png`) + bust;
 
   return (
     <div className="story-card">

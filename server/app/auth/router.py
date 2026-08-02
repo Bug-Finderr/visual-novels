@@ -43,8 +43,11 @@ async def google_callback(request: Request):
         raw,
         max_age=config.SESSION_TTL_DAYS * 86400,
         httponly=True,
-        samesite="lax",
-        secure=False,  # localhost is http in dev; set True behind https
+        # Dev default: Lax + insecure (http://localhost). In prod set
+        # SESSION_COOKIE_SECURE=1, and SameSite=None only when the SPA is on a
+        # different site than the API (cross-site XHR needs None+Secure).
+        samesite=config.SESSION_COOKIE_SAMESITE,
+        secure=config.SESSION_COOKIE_SECURE,
         path="/",
     )
     return resp
