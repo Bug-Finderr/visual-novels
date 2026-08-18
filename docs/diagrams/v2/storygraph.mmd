@@ -1,0 +1,27 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	plot(plot)
+	world(world)
+	characters(characters)
+	chapter(chapter)
+	memory(memory)
+	assemble(assemble)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> plot;
+	chapter --> memory;
+	characters --> chapter;
+	memory -. &nbsp;approved&nbsp; .-> assemble;
+	memory -.-> chapter;
+	memory -.-> characters;
+	memory -.-> world;
+	plot --> world;
+	world --> characters;
+	assemble --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

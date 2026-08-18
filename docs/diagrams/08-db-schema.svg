@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/><stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Data Model — SQLite Schema</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">data/storyplex.db · stdlib sqlite3 · all child tables CASCADE on session delete</text>
+
+  <!-- sessions (center) -->
+  <g filter="url(#sh)">
+    <rect x="450" y="100" width="320" height="280" rx="10" fill="#1a1a2e" stroke="#7c3aed" stroke-width="2"/>
+    <text x="610" y="128" text-anchor="middle" fill="#c4b5fd" font-size="13" font-weight="700">sessions</text>
+    <line x1="470" y1="138" x2="750" y2="138" stroke="#2a2a40"/>
+    <g font-size="11" font-family="ui-monospace, monospace">
+      <text x="470" y="158" fill="#86efac">id  TEXT  PK</text>
+      <text x="470" y="174" fill="#e8e8f0">title  TEXT</text>
+      <text x="470" y="190" fill="#e8e8f0">status  TEXT  (created/generating/ready/error)</text>
+      <text x="470" y="206" fill="#9898b0">setup_genre  TEXT</text>
+      <text x="470" y="222" fill="#9898b0">setup_art_style  TEXT</text>
+      <text x="470" y="238" fill="#9898b0">setup_setting  TEXT</text>
+      <text x="470" y="254" fill="#9898b0">setup_protagonist_name  TEXT</text>
+      <text x="470" y="270" fill="#9898b0">setup_protagonist_personality  TEXT</text>
+      <text x="470" y="286" fill="#9898b0">setup_tone  TEXT</text>
+      <text x="470" y="302" fill="#9898b0">setup_premise  TEXT</text>
+      <text x="470" y="318" fill="#a78bfa">world_lore  TEXT (JSON)</text>
+      <text x="470" y="334" fill="#a78bfa">plot_arc    TEXT (JSON)</text>
+      <text x="470" y="350" fill="#67e8f9">current_scene_id  TEXT</text>
+      <text x="470" y="366" fill="#67e8f9">current_label     TEXT</text>
+    </g>
+  </g>
+
+  <!-- characters -->
+  <g filter="url(#sh)">
+    <rect x="40" y="430" width="280" height="240" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="180" y="458" text-anchor="middle" fill="#c4b5fd" font-size="13" font-weight="700">characters</text>
+    <line x1="60" y1="468" x2="300" y2="468" stroke="#2a2a40"/>
+    <g font-size="11" font-family="ui-monospace, monospace">
+      <text x="60" y="488" fill="#86efac">id  TEXT  PK*</text>
+      <text x="60" y="504" fill="#86efac">session_id  TEXT  FK*</text>
+      <text x="60" y="520" fill="#e8e8f0">name  TEXT</text>
+      <text x="60" y="536" fill="#9898b0">color, role, personality</text>
+      <text x="60" y="552" fill="#9898b0">appearance, backstory</text>
+      <text x="60" y="568" fill="#9898b0">relationship, speech_style</text>
+      <text x="60" y="584" fill="#9898b0">quirks  TEXT (JSON)</text>
+      <text x="60" y="600" fill="#a78bfa">voice_caption  TEXT (JP)</text>
+      <text x="60" y="616" fill="#9898b0">sprites_generated  INT</text>
+      <text x="60" y="632" fill="#9898b0">is_dynamic  INT</text>
+      <text x="60" y="660" fill="#67e8f9">PK (id, session_id)</text>
+    </g>
+  </g>
+
+  <!-- scenes -->
+  <g filter="url(#sh)">
+    <rect x="340" y="430" width="240" height="200" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="460" y="458" text-anchor="middle" fill="#c4b5fd" font-size="13" font-weight="700">scenes</text>
+    <line x1="360" y1="468" x2="560" y2="468" stroke="#2a2a40"/>
+    <g font-size="11" font-family="ui-monospace, monospace">
+      <text x="360" y="488" fill="#86efac">id  TEXT  PK*</text>
+      <text x="360" y="504" fill="#86efac">session_id  TEXT  FK*</text>
+      <text x="360" y="520" fill="#e8e8f0">name  TEXT</text>
+      <text x="360" y="536" fill="#9898b0">description  TEXT</text>
+      <text x="360" y="552" fill="#9898b0">narrative_context  TEXT</text>
+      <text x="360" y="568" fill="#9898b0">image_generated  INT</text>
+      <text x="360" y="584" fill="#9898b0">is_dynamic  INT</text>
+      <text x="360" y="612" fill="#67e8f9">PK (id, session_id)</text>
+    </g>
+  </g>
+
+  <!-- script_labels -->
+  <g filter="url(#sh)">
+    <rect x="600" y="430" width="240" height="200" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="720" y="458" text-anchor="middle" fill="#c4b5fd" font-size="13" font-weight="700">script_labels</text>
+    <line x1="620" y1="468" x2="820" y2="468" stroke="#2a2a40"/>
+    <g font-size="11" font-family="ui-monospace, monospace">
+      <text x="620" y="488" fill="#86efac">session_id  TEXT  FK*</text>
+      <text x="620" y="504" fill="#86efac">label_name  TEXT  PK*</text>
+      <text x="620" y="520" fill="#a78bfa">statements  TEXT (JSON list)</text>
+      <text x="620" y="536" fill="#9898b0">sort_order  INT</text>
+      <text x="620" y="564" fill="#67e8f9">PK (session_id, label_name)</text>
+    </g>
+  </g>
+
+  <!-- dialogue_history -->
+  <g filter="url(#sh)">
+    <rect x="860" y="430" width="300" height="200" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="1010" y="458" text-anchor="middle" fill="#c4b5fd" font-size="13" font-weight="700">dialogue_history</text>
+    <line x1="880" y1="468" x2="1140" y2="468" stroke="#2a2a40"/>
+    <g font-size="11" font-family="ui-monospace, monospace">
+      <text x="880" y="488" fill="#86efac">id  INTEGER  PK AUTO</text>
+      <text x="880" y="504" fill="#86efac">session_id  TEXT  FK*</text>
+      <text x="880" y="520" fill="#e8e8f0">role  TEXT  (user/model)</text>
+      <text x="880" y="536" fill="#a78bfa">content  TEXT</text>
+      <text x="880" y="552" fill="#9898b0">label_context  TEXT</text>
+      <text x="880" y="568" fill="#9898b0">created_at  DATETIME</text>
+      <text x="880" y="600" fill="#67e8f9">used as Gemini chat history</text>
+    </g>
+  </g>
+
+  <!-- relations -->
+  <g stroke="#a78bfa" stroke-width="1.5" fill="none">
+    <path d="M 540 380 V 410 H 180 V 430"/>
+    <path d="M 590 380 V 410 H 460 V 430"/>
+    <path d="M 640 380 V 410 H 720 V 430"/>
+    <path d="M 690 380 V 410 H 1010 V 430"/>
+  </g>
+  <text x="180" y="420" text-anchor="middle" fill="#9898b0" font-size="10">N · ON DELETE CASCADE</text>
+  <text x="460" y="420" text-anchor="middle" fill="#9898b0" font-size="10">N · CASCADE</text>
+  <text x="720" y="420" text-anchor="middle" fill="#9898b0" font-size="10">N · CASCADE</text>
+  <text x="1010" y="420" text-anchor="middle" fill="#9898b0" font-size="10">N · CASCADE</text>
+
+  <!-- File-system sibling -->
+  <g filter="url(#sh)">
+    <rect x="40" y="120" width="380" height="240" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.5"/>
+    <text x="230" y="150" text-anchor="middle" fill="#86efac" font-size="13" font-weight="700">Filesystem (sibling to DB)</text>
+    <text x="60" y="178" fill="#e8e8f0" font-size="11" font-family="ui-monospace, monospace">data/generated/&lt;sid&gt;/</text>
+    <text x="80" y="196" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">characters/&lt;cid&gt;/</text>
+    <text x="100" y="212" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">neutral.png        ← Gemini</text>
+    <text x="100" y="226" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">&lt;expr&gt;.png         ← THA3 composite</text>
+    <text x="100" y="240" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">&lt;expr&gt;_blink.png   ← THA3 composite</text>
+    <text x="100" y="254" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">&lt;expr&gt;_mouth_*.png ← THA3 composite</text>
+    <text x="80" y="276" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">backgrounds/&lt;sceneId&gt;.png   ← Gemini</text>
+    <text x="80" y="294" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">audio/</text>
+    <text x="100" y="310" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">manifest.json     ← script→file map</text>
+    <text x="100" y="324" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">&lt;sha1&gt;.wav        ← Irodori TTS</text>
+    <text x="60" y="350" fill="#86efac" font-size="11">Excluded from git via .gitignore</text>
+  </g>
+
+  <!-- Migration note -->
+  <g filter="url(#sh)">
+    <rect x="800" y="120" width="360" height="240" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.5"/>
+    <text x="980" y="150" text-anchor="middle" fill="#86efac" font-size="13" font-weight="700">Migration policy</text>
+    <text x="820" y="178" fill="#9898b0" font-size="11">- Schema applied via CREATE IF NOT EXISTS on startup</text>
+    <text x="820" y="196" fill="#9898b0" font-size="11">- Defensive ALTER TABLE in _migrate() for new columns</text>
+    <text x="820" y="212" fill="#9898b0" font-size="11">  (e.g. characters.voice_caption added after launch)</text>
+    <text x="820" y="240" fill="#a78bfa" font-size="12" font-weight="600">Connection model</text>
+    <text x="820" y="258" fill="#9898b0" font-size="11">- Single sqlite3 connection (check_same_thread=False)</text>
+    <text x="820" y="274" fill="#9898b0" font-size="11">- threading.RLock guards every transaction</text>
+    <text x="820" y="290" fill="#9898b0" font-size="11">- All writes commit on context-manager exit</text>
+    <text x="820" y="318" fill="#a78bfa" font-size="12" font-weight="600">Why SQLite (and not Postgres)</text>
+    <text x="820" y="336" fill="#9898b0" font-size="11">Single-process app, sub-1k sessions/user, no ops burden,</text>
+    <text x="820" y="350" fill="#9898b0" font-size="11">file-level backup. Migrate later if needed.</text>
+  </g>
+</svg>

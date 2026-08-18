@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Storyplex — Technical Design</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root {
+    --bg: #0a0a0f; --bg-alt: #14141f; --card: #1a1a2e; --card-2: #11111e;
+    --text: #e8e8f0; --muted: #9898b0;
+    --accent: #7c3aed; --accent-2: #a78bfa; --accent-3: #c4b5fd;
+    --green: #22c55e; --green-2: #86efac; --cyan: #67e8f9;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.55; font-size: 11pt; }
+  a { color: var(--accent-2); }
+  .page { padding: 8mm; max-width: 210mm; margin: 0 auto; }
+  .cover { display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background: radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #0a0a0f 70%); padding: 50mm 16mm 30mm; text-align: center;
+    height: 248mm; box-sizing: border-box; }
+  .cover h1 { font-size: 56pt; margin: 0; padding: 0; border: none; background: linear-gradient(135deg, #7c3aed, #a78bfa, #c4b5fd);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; letter-spacing: -.02em; }
+  .cover .tagline { color: var(--accent-3); font-size: 16pt; margin-top: 6mm; }
+  .cover .sub { color: var(--muted); margin-top: 20mm; max-width: 130mm; font-size: 11pt; }
+  .cover .meta { margin-top: 30mm; color: var(--muted); font-size: 9pt; letter-spacing: .08em; text-transform: uppercase; }
+
+  h1 { font-size: 22pt; margin: 0 0 4mm; color: var(--text); border-bottom: 1px solid #2a2a40; padding-bottom: 3mm; }
+  h2 { font-size: 14pt; margin: 8mm 0 2mm; color: var(--accent-3); }
+  h3 { font-size: 11.5pt; margin: 4mm 0 1.5mm; color: var(--accent-2); }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  ul { padding-left: 5mm; margin: 0 0 2mm; }
+  li { margin-bottom: 1mm; }
+  pre, code { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+  pre { background: var(--card-2); border: 1px solid #2a2a40; padding: 3mm; border-radius: 2mm; overflow: auto;
+    font-size: 9pt; line-height: 1.4; }
+  code { background: var(--card-2); padding: 0.5mm 1.5mm; border-radius: 1mm; font-size: 9.5pt; color: var(--accent-3); }
+  .pill { display: inline-block; padding: 0.5mm 2mm; border-radius: 8mm; font-size: 8pt;
+    background: rgba(124,58,237,.18); color: var(--accent-3); border: 1px solid rgba(124,58,237,.4); margin-right: 1mm; }
+  .note { background: rgba(34,197,94,.08); border-left: 3px solid var(--green); padding: 3mm 4mm; border-radius: 1mm; margin: 3mm 0; color: var(--green-2); font-size: 10pt; }
+  .warn { background: rgba(239,68,68,.08); border-left: 3px solid #ef4444; padding: 3mm 4mm; border-radius: 1mm; margin: 3mm 0; color: #fca5a5; font-size: 10pt; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+  .card { background: var(--card); border: 1px solid #2a2a40; border-radius: 2mm; padding: 3mm 4mm; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.5pt; }
+  th, td { text-align: left; padding: 2mm 3mm; border-bottom: 1px solid #2a2a40; vertical-align: top; }
+  th { color: var(--accent-3); font-weight: 600; background: var(--card-2); }
+  .diagram { margin: 4mm 0; }
+  .diagram img, .diagram svg { width: 100%; height: auto; border-radius: 2mm; background: var(--bg-alt); }
+  .caption { color: var(--muted); font-size: 9pt; margin-top: 1mm; }
+  .toc ol { padding-left: 6mm; }
+  .toc li { margin-bottom: 1mm; }
+  hr { border: 0; border-top: 1px solid #2a2a40; margin: 6mm 0; }
+  .num { color: var(--accent-2); font-weight: 700; }
+  .page-break { page-break-after: always; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover page-break">
+  <svg viewBox="0 0 600 110" width="430" height="80" xmlns="http://www.w3.org/2000/svg" aria-label="Storyplex">
+    <defs>
+      <linearGradient id="logoGrad" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0" stop-color="#7c3aed"/>
+        <stop offset="0.5" stop-color="#a78bfa"/>
+        <stop offset="1" stop-color="#c4b5fd"/>
+      </linearGradient>
+    </defs>
+    <text x="300" y="84" text-anchor="middle"
+          font-family="Inter, system-ui, sans-serif" font-weight="700"
+          font-size="92" letter-spacing="-2" fill="url(#logoGrad)">Storyplex</text>
+  </svg>
+  <div class="tagline">AI-generated visual novels with live characters &amp; Japanese voice acting</div>
+  <div class="sub">A technical design document covering the full stack — story generation, sprite production, GPU-backed character animation (THA3), Japanese voice synthesis (Irodori), and the runtime gameplay loop.</div>
+  <div class="meta">Internal · v1.0 · April 2026</div>
+</section>
+
+<!-- ============ TOC ============ -->
+<section class="page page-break">
+  <h1>Contents</h1>
+  <div class="toc">
+    <ol>
+      <li>Executive summary</li>
+      <li>System architecture</li>
+      <li>Tech stack</li>
+      <li>Story generation (Gemini 2.5 Pro)</li>
+      <li>Character sprites — &amp; the pivot to 1 sprite per character</li>
+      <li>Character animation — THA3 face-localized pipeline</li>
+      <li>Voice synthesis — Aratako Irodori-TTS-500M-v2-VoiceDesign</li>
+      <li>Gameplay loop &amp; runtime AI</li>
+      <li>Frontend animation engine</li>
+      <li>GPU inference infrastructure (H100, bootstrap, networking)</li>
+      <li>Performance numbers</li>
+      <li>Data model — SQLite schema</li>
+      <li>Deployment &amp; operations</li>
+      <li>Roadmap / future work</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 1 EXEC SUMMARY ============ -->
+<section class="page page-break">
+  <h1>1 · Executive summary</h1>
+  <p>Storyplex generates an entire bespoke visual novel from a short setup form: world, characters with distinct voices, full sprite art, animated faces, scenic backgrounds, an opening script, and per-line Japanese voice acting. Once the player is in the game, the AI continues the story turn-by-turn — each choice or free-text input produces fresh dialogue with new audio synthesized in seconds.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>What we use to do this</h3>
+      <ul>
+        <li><span class="pill">Gemini 2.5 Pro</span> world &amp; opening script (one big JSON)</li>
+        <li><span class="pill">Gemini 2.5 Flash Image</span> 1 neutral sprite/character + scene backgrounds</li>
+        <li><span class="pill">THA3 (separable_half, fp16)</span> face-localized expression + animation derivation on H100</li>
+        <li><span class="pill">Irodori-TTS-500M-v2-VoiceDesign</span> per-line Japanese voice synthesis on H100</li>
+        <li><span class="pill">Gemini 2.5 Flash</span> per-turn runtime dialogue</li>
+        <li><span class="pill">FastAPI + SQLite</span> backend; <span class="pill">Vite + vanilla JS</span> frontend</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What makes this interesting</h3>
+      <ul>
+        <li>~10× cost reduction in image generation by deriving 9 expressions × 4 frames each from a single Gemini sprite via THA3 pose deltas</li>
+        <li>Face-localized animation: body stays Gemini-sharp, only the face is THA3-warped — solves THA3's quality drop on full-body inputs</li>
+        <li>Each character gets a distinct voice via JP voice-design captions written by Gemini (gender + age + tone + pace)</li>
+        <li>Hash-based audio manifest lets the frontend look up TTS output deterministically without coordination</li>
+        <li>Runtime TTS happens inline with the gameplay response so the next dialogue line arrives with audio attached</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>End-to-end pipeline at a glance</h2>
+  <p class="muted">A new session ("Generate Story" → game ready) takes approximately 5 minutes. The bulk of the time is Gemini Pro story generation (~30-60s) and Gemini Image sprite generation (~30s × N characters). Animations and voices are GPU-bound on the H100 and add roughly 30 seconds combined.</p>
+</section>
+
+<!-- ============ 2 ARCHITECTURE ============ -->
+<section class="page page-break">
+  <h1>2 · System architecture</h1>
+  <p>Three tiers, three trust boundaries. The browser only talks to the backend (Vite proxy maps both <code>/api/*</code> and <code>/game-assets/*</code> to the FastAPI server). The backend talks to Gemini in the cloud and to the two GPU services running on a single GCP H100 spot VM. The two GPU services are isolated processes in separate <code>uv</code>-managed virtualenvs sharing the same NVMe scratch disk.</p>
+  <div class="diagram"><img src="diagrams/png/01-system-architecture.png" alt="system architecture"></div>
+  <div class="caption">Diagram 1 · Three-tier architecture. Backend mediates between the browser and the model providers. The two GPU services share an H100 but run independently in separate <code>uv</code> venvs.</div>
+</section>
+
+<!-- ============ 3 TECH STACK ============ -->
+<section class="page page-break">
+  <h1>3 · Tech stack</h1>
+  <table>
+    <thead><tr><th>Layer</th><th>Tool / version</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Frontend</td><td>Vite 6 · vanilla ES modules</td><td>Zero framework overhead; we own ~15 JS files including a custom VN engine</td></tr>
+      <tr><td>Backend</td><td>FastAPI 0.115 · uvicorn · Python 3.13</td><td>Async I/O, Pydantic schemas, hot reload; SSE for generation progress</td></tr>
+      <tr><td>DB</td><td>SQLite (stdlib)</td><td>Single-process app; no ops; file-level backup</td></tr>
+      <tr><td>Story / dialogue</td><td><code>google-genai</code> Python SDK</td><td>Gemini 2.5 Pro for story · Gemini 2.5 Flash for runtime dialogue</td></tr>
+      <tr><td>Sprites / backgrounds</td><td>Gemini 2.5 Flash Image</td><td>Native multimodal image gen; ~$$$ per call vs. 10× the cost on alternatives</td></tr>
+      <tr><td>BG removal</td><td><code>rembg</code> (U²-Net)</td><td>Reliable transparent cutouts on stylized art; soft dependency</td></tr>
+      <tr><td>Animation</td><td>Talking Head Anime 3 · separable_half · fp16</td><td>Face puppeteering with a 45-dim pose vector; 12-22 ms / frame on H100</td></tr>
+      <tr><td>TTS</td><td>Aratako/Irodori-TTS-500M-v2-VoiceDesign · bf16</td><td>RF-DiT 500M + DACVAE; voice-design captions in JP; no reference audio needed</td></tr>
+      <tr><td>Runtime image</td><td>Pillow 12</td><td>Face crop + composite; PNG re-encode</td></tr>
+      <tr><td>HTTP client</td><td><code>httpx</code></td><td>Backend → puppeteer / TTS</td></tr>
+      <tr><td>GPU venv</td><td><code>uv</code> + Python 3.10</td><td>Isolated venvs per service; reproducible installs; fast on cold spot boots</td></tr>
+      <tr><td>Cloud</td><td>GCP Compute Engine spot VM, 1× H100 80GB, Ubuntu 22.04</td><td>Idle between sessions; ~$2–3/hr while running</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 4 STORY ============ -->
+<section class="page page-break">
+  <h1>4 · Story generation</h1>
+  <p>Everything that defines a session — the world, ~3-5 characters, plot arc, ~5 background scenes, and a 20-40 statement opening script — is produced in <em>one</em> Gemini 2.5 Pro call.</p>
+
+  <h3>Why one big call instead of a chain</h3>
+  <ul>
+    <li>Internal consistency. Characters reference each other; opening script uses character ids defined earlier in the JSON.</li>
+    <li>Latency. One ~30-60s call beats sequential calls that compound network overhead.</li>
+    <li>Cost. Pro tokens are amortized over the full payload; <code>response_mime_type: application/json</code> kills the markdown wrapping problem.</li>
+  </ul>
+
+  <h3>What the prompt requires</h3>
+  <p>The world-building prompt (<code>app/services/ai/prompts/world_building.py</code>) demands a precise schema:</p>
+  <pre>{
+  "worldLore":      { name, description, rules[], history },
+  "characters":     [{ id, name, age, role, personality, appearance, backstory,
+                       relationshipToProtagonist, speechStyle, quirks[], color, voiceCaption }],
+  "plotArc":        { premise, act1, act2, act3, themes[], possibleEndings[] },
+  "initialScenes":  [{ id, name, description, narrativeContext }],
+  "openingScript":  [{ type, speaker, expression, text, jp, sceneId, characterId, position, choices[] }]
+}</pre>
+  <p>Two fields earn their keep:</p>
+  <ul>
+    <li><code>voiceCaption</code> — a Japanese description of each character's voice (gender + age + tone + pace). The prompt requires the caption to start with explicit <code>女性 / 男性 / 男の子 / …</code> so the TTS engine renders distinguishable voices per character.</li>
+    <li><code>jp</code> — a natural Japanese version of every dialogue and narration line, matching the speaker's personality. This is what the TTS engine actually speaks; the <code>text</code> field stays in the player's language for the dialogue box.</li>
+  </ul>
+
+  <div class="note"><strong>Validation:</strong> we parse the JSON with three fallbacks — direct <code>json.loads</code>, code-fenced extraction, and slice-from-first-{-to-last-}. Failure raises and the generation pipeline marks the session <code>error</code>.</div>
+</section>
+
+<!-- ============ 5 SPRITES + PIVOT ============ -->
+<section class="page page-break">
+  <h1>5 · Character sprites — and the pivot</h1>
+  <p>Storyplex used to generate <strong>10 separate Gemini Image calls per character</strong> (one per emotion: happy, sad, angry, …). That cost ~$0.5–1 per character and took ~5 minutes for a session with 3-5 characters. Worse, Gemini sometimes drifted between expressions — slightly different clothing, hair length, or face shape — even with the previous frame as reference.</p>
+
+  <h3>The pivot — 1 sprite + 9 derived</h3>
+  <p>Once we had the THA3 puppeteer running, we realized THA3's 45-dim pose vector covers all the deformations a per-emotion Gemini call was producing: eyebrow shapes (troubled, angry, lowered, raised, happy, serious), eye shapes (wink, surprised, relaxed, unimpressed), mouth shapes (aaa, iii, uuu, eee, ooo, smirk, raised/lowered corners), iris position, head pose. So we cut Gemini calls down to <strong>1 neutral sprite per character</strong> and derive the other 9 expressions from it via THA3 pose deltas.</p>
+
+  <div class="grid-3">
+    <div class="card">
+      <h3>Cost</h3>
+      <p class="muted">Per character: 1 Gemini Image vs 10. ~10× cheaper, faster, and with the same (or better) output quality.</p>
+    </div>
+    <div class="card">
+      <h3>Consistency</h3>
+      <p class="muted">All 10 expressions are warps of the same source image. Clothing, hair, body shape are guaranteed identical — no Gemini drift.</p>
+    </div>
+    <div class="card">
+      <h3>Tradeoff</h3>
+      <p class="muted">THA3 only does facial-muscle deformations. Extreme moments ("tears streaming, body trembling") may need a one-off Gemini call later — easy to add.</p>
+    </div>
+  </div>
+
+  <h3>Per-character asset tree</h3>
+  <div class="diagram"><img src="diagrams/png/03-frame-tree.png" alt="frame tree"></div>
+  <div class="caption">Diagram 3 · 1 Gemini sprite (green) + 39 THA3-derived frames (purple) per character. Plus per-line WAVs in <code>audio/</code>.</div>
+</section>
+
+<!-- ============ 6 ANIMATION ============ -->
+<section class="page page-break">
+  <h1>6 · Character animation — THA3 face-localized pipeline</h1>
+  <p>THA3 (Talking Head Anime 3, by pkhungurn) is a single-image puppeteering model trained on face-prominent anime portraits. Given a 512×512 input portrait and a 45-dim pose vector, it returns an animated 512×512 RGBA frame in ~12-22 ms on an H100.</p>
+
+  <h3>The full-body problem</h3>
+  <p>Storyplex sprites are 864×1184 (3:4) head-to-feet portraits. Feeding one directly to THA3 squishes it to 512×512 — the face shrinks from ~200 px tall to ~80 px. The model warps that tiny face, returns a 512×512, and we stretch back to 864×1184. The result is <em>visibly soft</em> compared to the Gemini neutral. During mouth-flap, every frame in the 5-frame cycle is a degraded copy. The player sees a sharp body until dialogue starts, then everything blurs.</p>
+
+  <h3>Fix: face-localized composite</h3>
+  <p>For each character we (1) heuristically crop the face region, (2) feed only that to THA3, (3) resize the THA3 output back to the face-crop size, (4) paste it over a copy of the pristine Gemini body. Body stays Gemini-sharp; only the face animates. There's no visible seam because the alpha channels of body and face crop are continuous.</p>
+
+  <div class="diagram"><img src="diagrams/png/04-tha3-face-pipeline.png" alt="THA3 face pipeline"></div>
+  <div class="caption">Diagram 4 · Crop → batch THA3 inference → resize → alpha_composite over body. The full pose mapping for all 10 emotions lives in <code>EXPRESSION_POSES</code>.</div>
+
+  <h3>Pose composition</h3>
+  <p>Each expression is described as a sparse dict over THA3's named pose keys. Animation overlays stack on top:</p>
+  <pre>EXPRESSION_POSES["happy"] = {
+  "eyebrow_happy_l": 0.7, "eyebrow_happy_r": 0.7,
+  "mouth_raised_corner_l": 0.6, "mouth_raised_corner_r": 0.6, "mouth_smirk": 0.3,
+}
+ANIMATION_POSES["mouth_open"] = { "mouth_aaa": 0.95 }
+
+# Per-frame pose for happy + open mouth:
+pose = {**EXPRESSION_POSES["happy"], **ANIMATION_POSES["mouth_open"]}</pre>
+  <p>The puppeteer's <code>/animate_batch</code> endpoint accepts <em>N</em> named poses per request. We send 4 poses per emotion (base + blink + mouth_half + mouth_open) and get back 4 PNGs in one round-trip — kills HTTP overhead.</p>
+
+  <h3>Idempotency</h3>
+  <p>Each frame is keyed by its emotion and animation variant on disk. Re-running <code>generate_for_character()</code> after a partial failure resumes from the missing frames; existing frames are skipped. A spot-instance preemption mid-generation can be recovered by re-running the pipeline.</p>
+</section>
+
+<!-- ============ 7 TTS ============ -->
+<section class="page page-break">
+  <h1>7 · Voice synthesis — Irodori TTS</h1>
+  <p>Aratako/Irodori-TTS-500M-v2-VoiceDesign is a Rectified-Flow Diffusion Transformer (~500M parameters) paired with a DACVAE codec for waveform reconstruction. It's Japanese-only, supports zero-shot voice design from a text caption (no reference audio required), and produces 48 kHz high-fidelity audio.</p>
+
+  <div class="diagram"><img src="diagrams/png/05-tts-pipeline.png" alt="Irodori TTS pipeline"></div>
+  <div class="caption">Diagram 5 · Each TTS call takes a Japanese text plus a JP voice-design caption. Inference is ~7× real-time on H100.</div>
+
+  <h3>Per-character voices</h3>
+  <p>The world-building prompt requires <code>voiceCaption</code> to start with explicit gender + age in Japanese:</p>
+  <pre>「穏やかで温かみのある60代の女性の声。ゆっくりとした口調で、優しく話す。」     # cafe owner
+「少し不機嫌でぶっきらぼうな20代後半の男性の声。低めのトーンで、ぼそぼそと話す。」  # grumpy regular
+「元気で明るい10代後半の女の子の声。少し早口で、感情豊かに話す。」              # cheerful friend</pre>
+  <p>The captions are passed verbatim to Irodori's <code>SamplingRequest.caption</code>. With <code>no_ref=True</code> the model designs the voice purely from the caption — no reference audio plumbing needed.</p>
+
+  <h3>Audio manifest — the frontend lookup</h3>
+  <p>For each rendered script line (e.g. <code>"sasaki_haru:happy Ah, you must be Aiko-chan."</code>) we compute <code>sha1(line)[:16]</code> and save the WAV at <code>audio/&lt;hash&gt;.wav</code>. A <code>manifest.json</code> in the same folder maps every script string to its filename. The frontend fetches the manifest once on game load and looks up the audio by exact-string match for each dialogue line.</p>
+
+  <div class="note">Hash-based naming makes runtime additions trivial: when the AI returns new dialogue, we synthesize the new lines and merge the deltas into the response under <code>audioManifest</code>. The frontend extends its in-memory manifest and the next dialogue line plays its voice immediately.</div>
+
+  <h3>Resilience</h3>
+  <p>If <code>TTS_URL</code> is unset, the pipeline silently skips voice synthesis. If a single Irodori call fails, we log a warning and continue. The frontend handles missing audio by simply not playing — typewriter still works.</p>
+</section>
+
+<!-- ============ 8 RUNTIME ============ -->
+<section class="page page-break">
+  <h1>8 · Gameplay loop &amp; runtime AI</h1>
+  <p>Once the player is in the game, every choice or free-text input becomes a single <code>POST /api/sessions/&lt;id&gt;/choice</code> (or <code>/free-input</code>). The handler does the full work synchronously so the response carries everything the frontend needs to keep playing.</p>
+
+  <div class="diagram"><img src="diagrams/png/07-runtime-loop.png" alt="runtime loop"></div>
+  <div class="caption">Diagram 7 · Runtime gameplay loop. <code>dialogue_engine</code> calls Gemini Flash with system prompt + recent 40-message history; <code>script_builder</code> formats statements into the script-label string protocol; <code>tts_generator</code> renders any new dialogue lines and returns the manifest delta in the same response.</div>
+
+  <h3>Dialogue engine</h3>
+  <p>The system prompt encodes world lore, characters with their speech styles, plot arc, current scene, and the strict output JSON shape. The chat history (last 40 lines) is sent as <code>contents</code> with alternating <code>user</code>/<code>model</code> roles. Gemini Flash returns the next segment as <code>{statements[], choices[], allowFreeInput, newCharacterIntroduced?, sceneChangeNeeded?}</code> with each dialogue/narration including a <code>jp</code> field.</p>
+
+  <h3>Dynamic introductions</h3>
+  <p>If the AI introduces a brand-new character mid-game, the response sets <code>newCharacterIntroduced</code>. The handler:</p>
+  <ol>
+    <li>Inserts the character into <code>characters</code> with <code>is_dynamic=1</code></li>
+    <li>Generates a single Gemini neutral sprite synchronously (so the next dialogue line can show them)</li>
+    <li>Kicks off the THA3 expression-derivation pass in a background executor</li>
+  </ol>
+  <p>Same idea for <code>sceneChangeNeeded</code> — Gemini Image renders a fresh background. The frontend gets enough payload to render immediately and progressively gains the rest as it loads.</p>
+</section>
+
+<!-- ============ 9 FRONTEND ============ -->
+<section class="page page-break">
+  <h1>9 · Frontend animation engine</h1>
+  <p>The frontend is vanilla JS — no React, no Vue. The custom VN engine is two files: <code>game-bridge.js</code> (script execution + dialogue + choices + audio) and <code>animated-sprite.js</code> (per-character animation state).</p>
+
+  <div class="diagram"><img src="diagrams/png/06-frontend-anim-stack.png" alt="frontend animation stack"></div>
+  <div class="caption">Diagram 6 · Each on-screen character is a 4-image stack inside an <code>.anim-stack</code> div that runs an idle-breath CSS animation. Frame swaps are <code>opacity: 1↔0</code> with <code>transition: none</code> — instant on the GPU compositor.</div>
+
+  <h3>Idle, blink, mouth-flap</h3>
+  <ul>
+    <li><strong>Idle breath</strong> — pure CSS keyframes on the stack: <code>translateY(-0.6%) scale(1.008)</code> over 4.4s. Speakers get a faster 3.2s loop.</li>
+    <li><strong>Blink</strong> — <code>setTimeout</code> loop with random 2.8-6.5s wait; swap to <code>.anim-blink</code> for 110ms then back. Suppressed during talking.</li>
+    <li><strong>Mouth flap</strong> — starts when <code>_typeText()</code> is called, stops on completion or click. Cycles <code>half → open → half → closed → closed</code> every 110ms. The browser composites pre-loaded images on the GPU; no flicker.</li>
+  </ul>
+
+  <h3>Speaker focus</h3>
+  <p>When dialogue starts, the speaker's sprite gets <code>.is-speaker</code> (slight scale up + saturated drop-shadow) and all other on-screen characters get <code>.is-quiet</code> (desaturate + dim). 0.45s ease transition.</p>
+
+  <h3>Typewriter &amp; audio</h3>
+  <p>Typewriter speed is 22ms/char with longer pauses on <code>.!?</code> (220ms) and <code>,;:</code> (110ms). Audio plays in parallel — first user click on the <em>Begin</em> gate primes the AudioContext so subsequent <code>audio.play()</code> calls aren't blocked by browser autoplay policy.</p>
+
+  <h3>Other polish</h3>
+  <ul>
+    <li>Background ken-burns (slow scale + translate over 38s, alternating)</li>
+    <li>Choice cards with hover-lift + animated reveal of the consequence hint</li>
+    <li>Web Audio synth for UI cues (click / select / hover / scene-in) — no asset deps</li>
+    <li>Click-anywhere-to-Begin overlay on game start (also primes audio autoplay)</li>
+  </ul>
+</section>
+
+<!-- ============ 10 GPU INFRA ============ -->
+<section class="page page-break">
+  <h1>10 · GPU inference infrastructure</h1>
+  <p>Two services on one VM: the THA3 puppeteer on port 8000 and the Irodori TTS on port 8001. They run in <em>separate</em> uv-managed venvs because their PyTorch / CUDA combos differ. Both bind <code>0.0.0.0</code> and share the GPU (~6 GB combined VRAM out of 80 GB available).</p>
+
+  <h3>Bootstrap is idempotent</h3>
+  <p>Spot instances can preempt at any time and lose all local NVMe data. Each service ships with a self-contained bootstrap script that brings up the entire environment from a fresh VM:</p>
+  <pre>scripts/bootstrap_inference_vm.sh   # THA3
+  → mounts first unformatted local NVMe at /workspace
+  → installs uv to ~/.local/bin
+  → creates py3.10 venv at /workspace/venvs/tha3
+  → clones THA3 repo
+  → installs torch 2.3.1+cu121 + matplotlib + scipy + fastapi + ...
+  → downloads ~860 MB weights from Dropbox, re-nests under data/models/
+
+scripts/bootstrap_tts_vm.sh         # Irodori
+  → uv sync inside the Irodori-TTS clone (its own pyproject)
+  → pre-fetches the HF checkpoint + DACVAE codec
+  → writes /workspace/run_tts.sh runner</pre>
+
+  <h3>Networking</h3>
+  <p>The VM has the <code>http-server</code> tag, which the existing GCP firewall rule <code>allow-tts-8000</code> uses (and we added <code>allow-puppeteer-tts-8001</code> for the second port). Both services are reachable on the VM's external IP at <code>:8000</code> and <code>:8001</code>. The backend points at them via <code>PUPPETEER_URL</code> / <code>TTS_URL</code> env vars.</p>
+
+  <div class="warn">Both ports are open to <code>0.0.0.0/0</code> with no auth. Acceptable for dev. For prod, restrict source ranges or front with an authenticated reverse proxy.</div>
+
+  <h3>Storage layout on the VM</h3>
+  <pre>/workspace/                                      # local NVMe SSD (ephemeral)
+├── repos/
+│   ├── talking-head-anime-3-demo/               # THA3 source
+│   └── Irodori-TTS/                             # Irodori source
+├── venvs/
+│   └── tha3/                                    # uv venv for puppeteer
+├── weights/
+│   └── tha3/models/{separable_half,...}/        # ~860 MB
+├── inference/
+│   └── server.py                                # puppeteer wrapper
+├── tts/
+│   └── tts_server.py                            # Irodori wrapper
+├── run_inference.sh                             # convenience starter
+└── run_tts.sh                                   # convenience starter</pre>
+</section>
+
+<!-- ============ 11 PERF ============ -->
+<section class="page page-break">
+  <h1>11 · Performance numbers</h1>
+  <table>
+    <thead><tr><th>Step</th><th>Model</th><th>Time</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Story / opening script</td><td>Gemini 2.5 Pro</td><td>~30-60 s</td><td>Single ~30 KB JSON; <code>response_mime_type=json</code></td></tr>
+      <tr><td>Per-character neutral sprite</td><td>Gemini 2.5 Flash Image</td><td>~25 s + ~10 s rembg</td><td>One call per character; 864×1184 RGBA out</td></tr>
+      <tr><td>Per-emotion frame batch</td><td>THA3 (separable_half, fp16)</td><td>~250 ms / batch of 4</td><td>~12-22 ms/frame raw + HTTP RTT; one batch per emotion</td></tr>
+      <tr><td>Per-scene background</td><td>Gemini 2.5 Flash Image</td><td>~10-15 s</td><td>5 backgrounds per session</td></tr>
+      <tr><td>Per-line voice</td><td>Irodori (bf16, 40 steps)</td><td>~1 s for ~7 s audio</td><td>~7× real-time on H100; 48 kHz mono PCM</td></tr>
+      <tr><td>Per-turn dialogue (runtime)</td><td>Gemini 2.5 Flash + TTS</td><td>~3-5 s</td><td>Includes TTS for ~5-15 new lines</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Cold vs warm</h3>
+  <p>Both GPU services pre-warm at startup: THA3 loads its 5 sub-modules into GPU memory (~250 ms), Irodori loads the 500M DiT plus DACVAE (~3 s). First request after a cold boot is ~770 ms (THA3) and ~1.2 s (Irodori) due to CUDA kernel JIT — steady-state numbers above kick in from the second request.</p>
+
+  <h3>End-to-end session generation</h3>
+  <p>For a 4-character session: ~5 minutes total wall-clock. Story (~45s) + 4× sprite gen (~140s) + 4× anim derive (~25s) + 5× background gen (~60s) + script build (instant) + ~20× TTS (~25s).</p>
+</section>
+
+<!-- ============ 12 DB ============ -->
+<section class="page page-break">
+  <h1>12 · Data model</h1>
+  <p>Schema is intentionally small — five tables and a sibling filesystem tree under <code>data/generated/&lt;sid&gt;/</code>. The generated folder is not stored in git and is treated as a derived artifact: re-runnable from the database alone (sprite + animation + voice).</p>
+
+  <div class="diagram"><img src="diagrams/png/08-db-schema.png" alt="db schema"></div>
+  <div class="caption">Diagram 8 · ER diagram. All child tables CASCADE on session delete. <code>characters.voice_caption</code> is added via a defensive <code>_migrate()</code> on startup since SQLite's <code>CREATE IF NOT EXISTS</code> doesn't add columns to existing tables.</div>
+</section>
+
+<!-- ============ 13 DEPLOY ============ -->
+<section class="page page-break">
+  <h1>13 · Deployment &amp; operations</h1>
+  <h3>Local dev (one machine)</h3>
+  <pre># 1. Install backend deps
+cd server &amp;&amp; pip install -r requirements.txt
+
+# 2. Set env vars in repo-root .env
+GEMINI_API_KEY=...
+PORT_SERVER=3001
+PORT_CLIENT=3000
+PUPPETEER_URL=http://&lt;vm-external-ip&gt;:8000
+TTS_URL=http://&lt;vm-external-ip&gt;:8001
+
+# 3. Start both servers
+npm run dev:server   # uvicorn :3001
+npm run dev:client   # vite :3000
+
+# 4. Open http://localhost:3000</pre>
+
+  <h3>VM bootstrap (one-time per spot incarnation)</h3>
+  <pre>gcloud compute scp scripts/bootstrap_inference_vm.sh \
+    muga-spot-1xh100:~/ --zone=us-east4-a --project=rumik-ai
+gcloud compute ssh muga-spot-1xh100 --zone=us-east4-a --project=rumik-ai \
+    --command='bash ~/bootstrap_inference_vm.sh &amp;&amp; bash ~/bootstrap_tts_vm.sh'
+gcloud compute ssh muga-spot-1xh100 --zone=us-east4-a --project=rumik-ai \
+    --command='nohup /workspace/run_inference.sh &amp;&gt; /workspace/logs/server.log &amp; \
+                nohup /workspace/run_tts.sh &amp;&gt; /workspace/logs/tts_server.log &amp;'</pre>
+
+  <h3>Health checks</h3>
+  <pre>curl http://localhost:3001/api/health           # backend
+curl http://localhost:3000/                     # frontend
+curl http://&lt;vm-ip&gt;:8000/health                 # puppeteer
+curl http://&lt;vm-ip&gt;:8001/health                 # TTS</pre>
+</section>
+
+<!-- ============ 13.5 · ITERATION DELTA ============ -->
+<section class="page page-break">
+  <h1>★ · What changed in this iteration</h1>
+  <p>The previous iteration shipped a Gemini-driven visual novel built on the <a href="https://monogatari.io">Monogatari VN engine</a> with a Node.js + Express backend. It generated a story and per-emotion sprite art, but characters were static images and there was no audio. This round we rewrote the stack and bolted on the live-character + Japanese-voice layer.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3 class="muted">Last iteration</h3>
+      <ul>
+        <li><strong>Frontend:</strong> Monogatari VN engine (heavy framework)</li>
+        <li><strong>Backend:</strong> Node.js + Express + sql.js</li>
+        <li><strong>Story:</strong> Gemini Pro one-shot world + opening script</li>
+        <li><strong>Sprites:</strong> 10 Gemini Image calls / character (one per emotion)</li>
+        <li><strong>Backgrounds:</strong> Gemini Image</li>
+        <li><strong>Animation:</strong> none — characters were static PNGs</li>
+        <li><strong>Voice:</strong> none — silent typewriter</li>
+        <li><strong>Inference infra:</strong> none</li>
+      </ul>
+    </div>
+    <div class="card" style="border-color: rgba(34,197,94,.55);">
+      <h3 style="color: var(--green-2);">This iteration</h3>
+      <ul>
+        <li><strong>Frontend:</strong> vanilla JS + custom VN engine (full control over playback, animation, audio)</li>
+        <li><strong>Backend:</strong> FastAPI + uvicorn + stdlib sqlite3 + httpx for GPU services</li>
+        <li><strong>Story:</strong> Gemini Pro now also emits per-line <code>jp</code> + JP <code>voiceCaption</code></li>
+        <li><strong>Sprites:</strong> 1 Gemini neutral / character — 9 expressions derived via THA3 pose deltas</li>
+        <li><strong>Backgrounds:</strong> Gemini Image (unchanged) plus ken-burns motion in browser</li>
+        <li><strong>Animation:</strong> THA3 puppeteer on H100 — face-localized composite over body</li>
+        <li><strong>Voice:</strong> Aratako Irodori-TTS (RF-DiT 500M) on H100 — distinct per-character JP voices</li>
+        <li><strong>Inference infra:</strong> GCP H100 spot VM, two <code>uv</code> venvs, idempotent bootstrap script</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">Net effect: a session now feels alive. Characters breathe, blink, and lip-sync; each speaks Japanese in their own voice; the per-character sprite cost dropped ~10× via the THA3 pivot.</div>
+</section>
+
+<!-- ============ 14 ROADMAP ============ -->
+<section class="page page-break">
+  <h1>14 · Roadmap / future work</h1>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Quality</h3>
+      <ul>
+        <li>Better face crop via lightweight anime face detector (replaces the heuristic top-30% bbox)</li>
+        <li>Lip-sync mouth shape to actual TTS audio amplitude (rather than fixed 110ms cycle)</li>
+        <li>Per-language localization of <code>jp</code> field — multilingual TTS</li>
+        <li>Higher-fidelity expressions for peak dramatic moments via on-demand Gemini Image</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Engineering</h3>
+      <ul>
+        <li>Replace SSE polling with WebSocket for generation progress</li>
+        <li>Move <code>data/generated/</code> off local disk to GCS for cross-VM session continuity</li>
+        <li>Replace public 0.0.0.0/0 firewall rule with IAP tunnel auth</li>
+        <li>Add a reverse proxy that batches multiple browser audio prefetches into a single VM call</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:4mm;">
+    <div class="card">
+      <h3>Product</h3>
+      <ul>
+        <li>Save / load slots; export run as a "scene reel" video</li>
+        <li>Multi-character cross-talk choreography (look-at-speaker, nodding)</li>
+        <li>Player-defined character voices via reference audio (Irodori supports it)</li>
+        <li>NSFW-safety pre-classifier on Gemini outputs</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Cost</h3>
+      <ul>
+        <li>Cache backgrounds across sessions with similar settings (image embedding match)</li>
+        <li>Switch to GCP committed-use H100 quota at sustained load; spot for dev</li>
+        <li>Pre-render most-likely next dialogue lines speculatively during typewriter idle</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr>
+  <p class="muted" style="text-align:center;">Storyplex · Internal design doc · v1.0 · April 2026 · 14 sections · 8 diagrams</p>
+</section>
+
+</body>
+</html>

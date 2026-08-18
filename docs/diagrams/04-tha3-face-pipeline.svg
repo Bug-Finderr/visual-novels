@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/><stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">THA3 — Face-Localized Animation Pipeline</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">Why we crop the face: THA3 was trained on face-prominent portraits; squishing a full-body sprite degrades quality</text>
+
+  <!-- Step 1: full body -->
+  <g filter="url(#sh)">
+    <rect x="40" y="110" width="200" height="280" rx="10" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="140" y="138" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">1 · Full body sprite</text>
+    <text x="140" y="156" text-anchor="middle" fill="#9898b0" font-size="11">864×1184 RGBA (Gemini)</text>
+    <!-- mock body silhouette -->
+    <rect x="100" y="172" width="80" height="200" rx="8" fill="#2a2a40"/>
+    <circle cx="140" cy="195" r="22" fill="#3a3a55"/>
+    <rect x="80" y="220" width="120" height="80" rx="6" fill="#3a3a55"/>
+    <text x="140" y="385" text-anchor="middle" fill="#86efac" font-size="11">100% sharp</text>
+  </g>
+
+  <line x1="240" y1="245" x2="290" y2="245" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="265" y="235" text-anchor="middle" fill="#c4b5fd" font-size="10">crop</text>
+
+  <!-- Step 2: face crop -->
+  <g filter="url(#sh)">
+    <rect x="290" y="160" width="180" height="180" rx="10" fill="#1a132a" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="380" y="184" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">2 · Face crop</text>
+    <text x="380" y="202" text-anchor="middle" fill="#9898b0" font-size="11">~512×512 square</text>
+    <!-- face oval -->
+    <circle cx="380" cy="260" r="50" fill="#3a3a55"/>
+    <rect x="345" y="280" width="70" height="40" rx="6" fill="#3a3a55"/>
+    <text x="380" y="333" text-anchor="middle" fill="#9898b0" font-size="10">heuristic: top 30% of</text>
+  </g>
+
+  <line x1="470" y1="245" x2="520" y2="245" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="495" y="235" text-anchor="middle" fill="#c4b5fd" font-size="10">upload</text>
+
+  <!-- Step 3: THA3 -->
+  <g filter="url(#sh)">
+    <rect x="520" y="160" width="220" height="180" rx="10" fill="#0a1a25" stroke="#06b6d4" stroke-opacity="0.7"/>
+    <text x="630" y="184" text-anchor="middle" fill="#67e8f9" font-size="12" font-weight="700">3 · THA3 inference</text>
+    <text x="630" y="202" text-anchor="middle" fill="#9898b0" font-size="11">/animate_batch (4 poses)</text>
+    <text x="540" y="225" fill="#e8e8f0" font-size="11">eyebrow_decomposer (CNN)</text>
+    <text x="540" y="241" fill="#e8e8f0" font-size="11">eyebrow_morph_combiner</text>
+    <text x="540" y="257" fill="#e8e8f0" font-size="11">face_morpher</text>
+    <text x="540" y="273" fill="#e8e8f0" font-size="11">two_algo_face_body_rotator</text>
+    <text x="540" y="289" fill="#e8e8f0" font-size="11">combiner</text>
+    <text x="540" y="312" fill="#22c55e" font-size="11">≈ 12-22 ms / frame, fp16</text>
+    <text x="540" y="328" fill="#9898b0" font-size="10">on H100; pose vector ∈ R⁴⁵</text>
+  </g>
+
+  <line x1="740" y1="245" x2="790" y2="245" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="765" y="235" text-anchor="middle" fill="#c4b5fd" font-size="10">×4 frames</text>
+
+  <!-- Step 4: animated faces -->
+  <g filter="url(#sh)">
+    <rect x="790" y="120" width="180" height="260" rx="10" fill="#1a132a" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="880" y="144" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">4 · Animated faces</text>
+    <text x="880" y="162" text-anchor="middle" fill="#9898b0" font-size="11">512×512 each</text>
+    <!-- 4 mini face thumbnails -->
+    <g>
+      <rect x="810" y="180" width="60" height="60" rx="4" fill="#2a2a40"/>
+      <text x="840" y="252" text-anchor="middle" fill="#9898b0" font-size="9">base</text>
+      <rect x="890" y="180" width="60" height="60" rx="4" fill="#2a2a40"/>
+      <text x="920" y="252" text-anchor="middle" fill="#9898b0" font-size="9">blink</text>
+      <rect x="810" y="270" width="60" height="60" rx="4" fill="#2a2a40"/>
+      <text x="840" y="342" text-anchor="middle" fill="#9898b0" font-size="9">mouth_half</text>
+      <rect x="890" y="270" width="60" height="60" rx="4" fill="#2a2a40"/>
+      <text x="920" y="342" text-anchor="middle" fill="#9898b0" font-size="9">mouth_open</text>
+    </g>
+  </g>
+
+  <!-- back arrow -->
+  <path d="M 970 250 H 1020 V 480 H 240 V 410" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <text x="1080" y="240" fill="#c4b5fd" font-size="10">composite</text>
+  <text x="1080" y="254" fill="#c4b5fd" font-size="10">back over</text>
+  <text x="1080" y="268" fill="#c4b5fd" font-size="10">pristine body</text>
+
+  <!-- Step 5: composite -->
+  <g filter="url(#sh)">
+    <rect x="40" y="430" width="220" height="200" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.6"/>
+    <text x="150" y="458" text-anchor="middle" fill="#86efac" font-size="12" font-weight="700">5 · Final composite</text>
+    <text x="150" y="476" text-anchor="middle" fill="#9898b0" font-size="11">864×1184 RGBA</text>
+    <rect x="100" y="490" width="100" height="115" rx="6" fill="#2a2a40"/>
+    <circle cx="150" cy="510" r="20" fill="#a78bfa" fill-opacity="0.55"/>
+    <text x="150" y="624" text-anchor="middle" fill="#86efac" font-size="11">body sharp + face animated</text>
+  </g>
+
+  <!-- Pose mapping note -->
+  <g filter="url(#sh)">
+    <rect x="290" y="430" width="450" height="200" rx="10" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.4"/>
+    <text x="310" y="458" fill="#c4b5fd" font-size="12" font-weight="700">EXPRESSION_POSES (per emotion → THA3 pose deltas)</text>
+    <text x="310" y="478" fill="#9898b0" font-size="11">happy:    eyebrow_happy_l/r=0.7 · mouth_smirk=0.3 · mouth_raised_corner=0.6</text>
+    <text x="310" y="494" fill="#9898b0" font-size="11">sad:      eyebrow_troubled_l/r=0.85 · eye_relaxed=0.4 · mouth_lowered_corner=0.55</text>
+    <text x="310" y="510" fill="#9898b0" font-size="11">angry:    eyebrow_angry_l/r=0.9 · eye_unimpressed=0.3 · mouth_lowered_corner=0.4</text>
+    <text x="310" y="526" fill="#9898b0" font-size="11">surprised: eyebrow_raised=0.85 · eye_surprised=0.7 · mouth_aaa=0.45</text>
+    <text x="310" y="542" fill="#9898b0" font-size="11">scared:   eyebrow_raised=0.55 · eye_surprised=0.65 · mouth_aaa=0.2</text>
+    <text x="310" y="558" fill="#9898b0" font-size="11">smug:     eyebrow_lowered=0.4 · eye_unimpressed=0.5 · mouth_smirk=0.7</text>
+    <text x="310" y="582" fill="#c4b5fd" font-size="12" font-weight="700">ANIMATION_POSES (overlay on top of emotion pose)</text>
+    <text x="310" y="600" fill="#9898b0" font-size="11">blink:      eye_blink_l=1.0, eye_blink_r=1.0</text>
+    <text x="310" y="616" fill="#9898b0" font-size="11">mouth_half: mouth_aaa=0.45  ·  mouth_open: mouth_aaa=0.95</text>
+  </g>
+
+  <!-- Why face-localized -->
+  <g filter="url(#sh)">
+    <rect x="770" y="430" width="390" height="200" rx="10" fill="#1a1a2e" stroke="#a78bfa" stroke-opacity="0.5"/>
+    <text x="790" y="458" fill="#c4b5fd" font-size="12" font-weight="700">Why face-localized?</text>
+    <text x="790" y="478" fill="#9898b0" font-size="11">THA3's training data: head-and-shoulders anime portraits.</text>
+    <text x="790" y="494" fill="#9898b0" font-size="11">Direct full-body input → THA3 squishes 864×1184 → 512×512,</text>
+    <text x="790" y="510" fill="#9898b0" font-size="11">the face shrinks to ~80×80 px, output is soft when restored.</text>
+    <text x="790" y="528" fill="#9898b0" font-size="11">Result: visible blur during mouth-flap (every animated frame</text>
+    <text x="790" y="544" fill="#9898b0" font-size="11">in the cycle is degraded).</text>
+    <text x="790" y="568" fill="#86efac" font-size="11" font-weight="600">Fix: feed only the face (~512×512), get back animated face,</text>
+    <text x="790" y="584" fill="#86efac" font-size="11" font-weight="600">paste over a copy of the original Gemini sprite.</text>
+    <text x="790" y="608" fill="#9898b0" font-size="11">Body stays Gemini-sharp · face animates · no visible seam</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="600" y="690" text-anchor="middle" fill="#7c3aed" font-size="11" font-weight="600">animation_generator.generate_for_character(session_id, character_id) · idempotent · best-effort fallback if puppeteer unavailable</text>
+</svg>

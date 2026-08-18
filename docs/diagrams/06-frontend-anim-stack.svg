@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/><stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Frontend Animation Engine</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">AnimatedSprite class · 4-frame stack with instant swap · idle breath + blink + mouth-flap</text>
+
+  <!-- Left: DOM tree -->
+  <g filter="url(#sh)">
+    <rect x="40" y="100" width="540" height="260" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="60" y="128" fill="#c4b5fd" font-size="13" font-weight="700">DOM structure (per character on screen)</text>
+
+    <text x="60" y="158" fill="#e8e8f0" font-size="12" font-family="ui-monospace, monospace">.character-sprite.position-{left|center|right}</text>
+    <text x="80" y="180" fill="#9898b0" font-size="12" font-family="ui-monospace, monospace">└── .anim-stack    ← idle breath (CSS keyframes, 4.4s loop)</text>
+    <text x="100" y="200" fill="#9898b0" font-size="12" font-family="ui-monospace, monospace">├── &lt;img class="anim-frame anim-base"        is-visible&gt;</text>
+    <text x="100" y="220" fill="#9898b0" font-size="12" font-family="ui-monospace, monospace">├── &lt;img class="anim-frame anim-blink"&gt;</text>
+    <text x="100" y="240" fill="#9898b0" font-size="12" font-family="ui-monospace, monospace">├── &lt;img class="anim-frame anim-mouth-half"&gt;</text>
+    <text x="100" y="260" fill="#9898b0" font-size="12" font-family="ui-monospace, monospace">└── &lt;img class="anim-frame anim-mouth-open"&gt;</text>
+
+    <text x="60" y="296" fill="#9898b0" font-size="11">Only ONE frame has .is-visible at a time. transition: none →</text>
+    <text x="60" y="312" fill="#9898b0" font-size="11">instant swap (no crossfade artifact during 110ms mouth cycle).</text>
+    <text x="60" y="338" fill="#86efac" font-size="11">All 4 frame URLs preloaded via Image() before activation —</text>
+    <text x="60" y="354" fill="#86efac" font-size="11">no flash on first display.</text>
+  </g>
+
+  <!-- Right: setExpression flow -->
+  <g filter="url(#sh)">
+    <rect x="600" y="100" width="560" height="260" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="620" y="128" fill="#c4b5fd" font-size="13" font-weight="700">setExpression(expr) flow</text>
+    <text x="620" y="156" fill="#9898b0" font-size="12">1. probe &lt;expr&gt;_blink.png — does animation set exist?</text>
+    <text x="620" y="174" fill="#9898b0" font-size="12">2. if yes: preload all 4 expr frames (Promise.all)</text>
+    <text x="620" y="192" fill="#9898b0" font-size="12">3. apply src to each &lt;img&gt; (or remove for static fallback)</text>
+    <text x="620" y="210" fill="#9898b0" font-size="12">4. swap to base frame · brief brightness pulse (expr-change)</text>
+
+    <text x="620" y="246" fill="#c4b5fd" font-size="13" font-weight="700">setSpeaker(isSpeaker)</text>
+    <text x="620" y="266" fill="#9898b0" font-size="11">.is-speaker  → --char-scale: 1.03; saturate(1.05); purple glow</text>
+    <text x="620" y="282" fill="#9898b0" font-size="11">.is-quiet    → --char-scale: 0.97; saturate(0.65); brightness(0.78)</text>
+    <text x="620" y="298" fill="#9898b0" font-size="11">CSS transitions ease the change over 0.45s</text>
+    <text x="620" y="324" fill="#86efac" font-size="11">Speaker also gets a faster idle breath (3.2 s vs 4.4 s)</text>
+  </g>
+
+  <!-- Cycles -->
+  <g filter="url(#sh)">
+    <rect x="40" y="380" width="370" height="310" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.55"/>
+    <text x="60" y="408" fill="#86efac" font-size="13" font-weight="700">Idle breath (always on)</text>
+    <text x="60" y="428" fill="#9898b0" font-size="11">CSS @keyframes breath {</text>
+    <text x="60" y="442" fill="#9898b0" font-size="11">  0%, 100% { translateY(0) scale(1.000) }</text>
+    <text x="60" y="456" fill="#9898b0" font-size="11">  50%      { translateY(-0.6%) scale(1.008) }</text>
+    <text x="60" y="470" fill="#9898b0" font-size="11">}  // 4.4 s loop</text>
+
+    <text x="60" y="500" fill="#86efac" font-size="13" font-weight="700">Blink loop (when not talking)</text>
+    <text x="60" y="520" fill="#9898b0" font-size="11">setTimeout cycle, random 2.8-6.5 s wait</text>
+    <text x="60" y="536" fill="#9898b0" font-size="11">→ swap to .anim-blink for 110 ms → swap back</text>
+
+    <text x="60" y="566" fill="#86efac" font-size="13" font-weight="700">Mouth flap (during typewriter)</text>
+    <text x="60" y="586" fill="#9898b0" font-size="11">cycle: half(110ms) → open(110ms) → half(110ms)</text>
+    <text x="60" y="602" fill="#9898b0" font-size="11">       → closed(110ms) → closed(110ms) → repeat</text>
+    <text x="60" y="622" fill="#9898b0" font-size="11">starts on _typeText(); stops on completion or click</text>
+
+    <text x="60" y="660" fill="#9898b0" font-size="11">All swaps are GPU-composited (will-change: opacity).</text>
+  </g>
+
+  <!-- Frame swap timeline -->
+  <g filter="url(#sh)">
+    <rect x="430" y="380" width="730" height="310" rx="10" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.4"/>
+    <text x="450" y="408" fill="#c4b5fd" font-size="13" font-weight="700">Mouth-flap timeline (scrubbing through one second)</text>
+
+    <!-- timeline ruler -->
+    <line x1="450" y1="450" x2="1140" y2="450" stroke="#9898b0" stroke-width="1"/>
+    <g fill="#9898b0" font-size="10" text-anchor="middle">
+      <text x="450" y="470">0 ms</text>
+      <text x="588" y="470">200</text>
+      <text x="726" y="470">400</text>
+      <text x="864" y="470">600</text>
+      <text x="1002" y="470">800</text>
+      <text x="1140" y="470">1000</text>
+    </g>
+    <!-- frame blocks: each block 110ms, ~76px wide -->
+    <g>
+      <!-- HALF (yellow) -->
+      <rect x="450" y="490" width="76" height="40" fill="#f59e0b" fill-opacity="0.7" rx="3"/>
+      <text x="488" y="515" text-anchor="middle" fill="#0a0a0f" font-size="11" font-weight="600">half</text>
+      <!-- OPEN -->
+      <rect x="526" y="490" width="76" height="40" fill="#ef4444" fill-opacity="0.7" rx="3"/>
+      <text x="564" y="515" text-anchor="middle" fill="#0a0a0f" font-size="11" font-weight="600">open</text>
+      <rect x="602" y="490" width="76" height="40" fill="#f59e0b" fill-opacity="0.7" rx="3"/>
+      <text x="640" y="515" text-anchor="middle" fill="#0a0a0f" font-size="11" font-weight="600">half</text>
+      <!-- CLOSED -->
+      <rect x="678" y="490" width="76" height="40" fill="#7c3aed" fill-opacity="0.45" rx="3"/>
+      <text x="716" y="515" text-anchor="middle" fill="#e8e8f0" font-size="11" font-weight="600">closed</text>
+      <rect x="754" y="490" width="76" height="40" fill="#7c3aed" fill-opacity="0.45" rx="3"/>
+      <text x="792" y="515" text-anchor="middle" fill="#e8e8f0" font-size="11" font-weight="600">closed</text>
+      <rect x="830" y="490" width="76" height="40" fill="#f59e0b" fill-opacity="0.7" rx="3"/>
+      <text x="868" y="515" text-anchor="middle" fill="#0a0a0f" font-size="11" font-weight="600">half</text>
+      <rect x="906" y="490" width="76" height="40" fill="#ef4444" fill-opacity="0.7" rx="3"/>
+      <text x="944" y="515" text-anchor="middle" fill="#0a0a0f" font-size="11" font-weight="600">open</text>
+      <rect x="982" y="490" width="76" height="40" fill="#f59e0b" fill-opacity="0.7" rx="3"/>
+      <text x="1020" y="515" text-anchor="middle" fill="#0a0a0f" font-size="11" font-weight="600">half</text>
+      <rect x="1058" y="490" width="76" height="40" fill="#7c3aed" fill-opacity="0.45" rx="3"/>
+      <text x="1096" y="515" text-anchor="middle" fill="#e8e8f0" font-size="11" font-weight="600">closed</text>
+    </g>
+
+    <text x="450" y="570" fill="#9898b0" font-size="11">closed = anim-base (the emotion's base frame)</text>
+    <text x="450" y="586" fill="#9898b0" font-size="11">half / open = anim-mouth-half / anim-mouth-open</text>
+
+    <text x="450" y="618" fill="#c4b5fd" font-size="12" font-weight="600">Audio plays in parallel</text>
+    <text x="450" y="636" fill="#9898b0" font-size="11">HTMLAudioElement starts at the same moment as typewriter.</text>
+    <text x="450" y="652" fill="#9898b0" font-size="11">Click to advance → typewriter fast-completes + audio.pause().</text>
+    <text x="450" y="670" fill="#9898b0" font-size="11">First audio.play() requires user gesture → click-to-Begin gate.</text>
+  </g>
+</svg>

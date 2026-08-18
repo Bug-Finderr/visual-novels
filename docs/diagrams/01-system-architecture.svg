@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <linearGradient id="grad-bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/>
+      <stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <linearGradient id="grad-card" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#1a1a2e"/>
+      <stop offset="1" stop-color="#11111e"/>
+    </linearGradient>
+    <linearGradient id="grad-gpu" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#2a1f3d"/>
+      <stop offset="1" stop-color="#1a132a"/>
+    </linearGradient>
+    <filter id="shad" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#grad-bg)"/>
+
+  <!-- title -->
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Storyplex — System Architecture</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">Browser ⇄ FastAPI backend ⇄ Gemini API + GPU inference services on a GCP H100 VM</text>
+
+  <!-- Browser tier -->
+  <g filter="url(#shad)">
+    <rect x="40" y="120" width="280" height="490" rx="14" fill="url(#grad-card)" stroke="#7c3aed" stroke-opacity="0.6"/>
+    <text x="180" y="155" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="600">BROWSER TIER</text>
+    <text x="180" y="178" text-anchor="middle" fill="#9898b0" font-size="11">localhost:3000 (Vite)</text>
+    <line x1="60" y1="200" x2="300" y2="200" stroke="#2a2a40"/>
+
+    <text x="65" y="225" fill="#e8e8f0" font-size="13" font-weight="600">Custom VN renderer</text>
+    <text x="65" y="248" fill="#9898b0" font-size="11">• AnimatedSprite (idle / blink /</text>
+    <text x="65" y="262" fill="#9898b0" font-size="11">  mouth-flap; speaker focus)</text>
+    <text x="65" y="280" fill="#9898b0" font-size="11">• Click-to-Begin gate (primes</text>
+    <text x="65" y="294" fill="#9898b0" font-size="11">  audio autoplay)</text>
+    <text x="65" y="312" fill="#9898b0" font-size="11">• Typewriter w/ punct pauses</text>
+    <text x="65" y="330" fill="#9898b0" font-size="11">• HTMLAudioElement playback</text>
+    <text x="65" y="348" fill="#9898b0" font-size="11">• Web-Audio synth UI cues</text>
+
+    <text x="65" y="385" fill="#e8e8f0" font-size="13" font-weight="600">Asset URLs (via Vite proxy)</text>
+    <text x="65" y="408" fill="#9898b0" font-size="11">/api/* → backend</text>
+    <text x="65" y="424" fill="#9898b0" font-size="11">/game-assets/* → backend</text>
+    <text x="65" y="440" fill="#9898b0" font-size="11">  /audio/manifest.json</text>
+    <text x="65" y="456" fill="#9898b0" font-size="11">  /audio/&lt;sha&gt;.wav</text>
+    <text x="65" y="472" fill="#9898b0" font-size="11">  /characters/&lt;cid&gt;/&lt;expr&gt;.png</text>
+    <text x="65" y="488" fill="#9898b0" font-size="11">  /characters/&lt;cid&gt;/&lt;expr&gt;_blink.png</text>
+    <text x="65" y="504" fill="#9898b0" font-size="11">  /characters/&lt;cid&gt;/&lt;expr&gt;_mouth_*.png</text>
+    <text x="65" y="520" fill="#9898b0" font-size="11">  /backgrounds/&lt;sid&gt;.png</text>
+  </g>
+
+  <!-- Backend tier -->
+  <g filter="url(#shad)">
+    <rect x="370" y="120" width="320" height="490" rx="14" fill="url(#grad-card)" stroke="#7c3aed" stroke-opacity="0.6"/>
+    <text x="530" y="155" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="600">BACKEND TIER</text>
+    <text x="530" y="178" text-anchor="middle" fill="#9898b0" font-size="11">localhost:3001 (FastAPI + uvicorn)</text>
+    <line x1="390" y1="200" x2="670" y2="200" stroke="#2a2a40"/>
+
+    <text x="385" y="225" fill="#e8e8f0" font-size="13" font-weight="600">Routes</text>
+    <text x="385" y="248" fill="#9898b0" font-size="11">/api/sessions  · CRUD + characters/scenes</text>
+    <text x="385" y="262" fill="#9898b0" font-size="11">/api/sessions/&lt;id&gt;/generate (SSE progress)</text>
+    <text x="385" y="276" fill="#9898b0" font-size="11">/api/sessions/&lt;id&gt;/script · /choice · /free-input</text>
+    <text x="385" y="290" fill="#9898b0" font-size="11">/api/assets/&lt;sid&gt;/* (PNG / WAV / JSON)</text>
+
+    <text x="385" y="320" fill="#e8e8f0" font-size="13" font-weight="600">Services</text>
+    <text x="385" y="343" fill="#9898b0" font-size="11">• story_generator → Gemini 2.5 Pro</text>
+    <text x="385" y="357" fill="#9898b0" font-size="11">• image_generator → Gemini 2.5 Flash Image</text>
+    <text x="385" y="371" fill="#9898b0" font-size="11">  (1 neutral sprite / character)</text>
+    <text x="385" y="385" fill="#9898b0" font-size="11">• animation_generator → Puppeteer (THA3)</text>
+    <text x="385" y="399" fill="#9898b0" font-size="11">  (10 expressions × 4 frames / character)</text>
+    <text x="385" y="413" fill="#9898b0" font-size="11">• tts_generator → Irodori TTS</text>
+    <text x="385" y="427" fill="#9898b0" font-size="11">• dialogue_engine → Gemini 2.5 Flash</text>
+    <text x="385" y="441" fill="#9898b0" font-size="11">• script_builder · session_service</text>
+    <text x="385" y="455" fill="#9898b0" font-size="11">• background_remover (rembg / U²-Net)</text>
+
+    <text x="385" y="490" fill="#e8e8f0" font-size="13" font-weight="600">Storage</text>
+    <text x="385" y="513" fill="#9898b0" font-size="11">SQLite (sessions, characters, scenes,</text>
+    <text x="385" y="527" fill="#9898b0" font-size="11">  script_labels, dialogue_history)</text>
+    <text x="385" y="543" fill="#9898b0" font-size="11">filesystem: data/generated/&lt;sid&gt;/{characters,</text>
+    <text x="385" y="557" fill="#9898b0" font-size="11">  backgrounds, audio}/</text>
+  </g>
+
+  <!-- GPU VM tier -->
+  <g filter="url(#shad)">
+    <rect x="740" y="120" width="420" height="490" rx="14" fill="url(#grad-gpu)" stroke="#a78bfa" stroke-opacity="0.7"/>
+    <text x="950" y="155" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="600">GPU INFERENCE TIER</text>
+    <text x="950" y="178" text-anchor="middle" fill="#9898b0" font-size="11">GCP spot VM · 1× NVIDIA H100 80GB · driver 580 / CUDA 13</text>
+    <line x1="760" y1="200" x2="1140" y2="200" stroke="#3a2a55"/>
+
+    <!-- THA3 service card -->
+    <rect x="760" y="218" width="380" height="170" rx="10" fill="#1a132a" stroke="#7c3aed" stroke-opacity="0.5"/>
+    <text x="775" y="240" fill="#a78bfa" font-size="12" font-weight="700">PUPPETEER  ·  port 8000</text>
+    <text x="775" y="260" fill="#e8e8f0" font-size="12">Talking Head Anime 3 (separable_half, fp16)</text>
+    <text x="775" y="278" fill="#9898b0" font-size="11">FastAPI: /portrait, /animate, /animate_batch</text>
+    <text x="775" y="294" fill="#9898b0" font-size="11">Input: 512×512 anime portrait + 45-dim pose</text>
+    <text x="775" y="310" fill="#9898b0" font-size="11">Output: 512×512 RGBA frame</text>
+    <text x="775" y="328" fill="#9898b0" font-size="11">Inference: ~12-22 ms / frame steady state</text>
+    <text x="775" y="346" fill="#9898b0" font-size="11">Backend uses face crop only → composite back</text>
+    <text x="775" y="364" fill="#9898b0" font-size="11">Weights: ~860 MB (Dropbox mirror, separable_half</text>
+    <text x="775" y="378" fill="#9898b0" font-size="11">  / standard_half / *_float variants)</text>
+
+    <!-- TTS service card -->
+    <rect x="760" y="408" width="380" height="170" rx="10" fill="#1a132a" stroke="#7c3aed" stroke-opacity="0.5"/>
+    <text x="775" y="430" fill="#a78bfa" font-size="12" font-weight="700">IRODORI TTS  ·  port 8001</text>
+    <text x="775" y="450" fill="#e8e8f0" font-size="12">Aratako/Irodori-TTS-500M-v2-VoiceDesign (bf16)</text>
+    <text x="775" y="468" fill="#9898b0" font-size="11">FastAPI: /synthesize, /synthesize_b64</text>
+    <text x="775" y="484" fill="#9898b0" font-size="11">Architecture: Rectified-Flow DiT 500M + DACVAE</text>
+    <text x="775" y="500" fill="#9898b0" font-size="11">Input: Japanese text + voice-design caption (JP)</text>
+    <text x="775" y="516" fill="#9898b0" font-size="11">Output: 48 kHz mono 16-bit PCM WAV</text>
+    <text x="775" y="534" fill="#9898b0" font-size="11">Inference: ~1 s for ~7 s of audio (~7× real-time)</text>
+    <text x="775" y="552" fill="#9898b0" font-size="11">Weights: ~2 GB (HuggingFace) ; uv-managed venv</text>
+    <text x="775" y="568" fill="#9898b0" font-size="11">/workspace on local NVMe SSD (re-bootstrappable)</text>
+  </g>
+
+  <!-- Arrows between tiers -->
+  <g stroke="#a78bfa" stroke-width="2" fill="none">
+    <line x1="320" y1="280" x2="370" y2="280" marker-end="url(#arr)"/>
+    <line x1="370" y1="320" x2="320" y2="320" marker-end="url(#arr)"/>
+    <line x1="690" y1="290" x2="740" y2="290" marker-end="url(#arr)"/>
+    <line x1="740" y1="450" x2="690" y2="450" marker-end="url(#arr)"/>
+  </g>
+  <text x="345" y="270" fill="#c4b5fd" font-size="10">HTTP / SSE</text>
+  <text x="345" y="335" fill="#c4b5fd" font-size="10">JSON / PNG / WAV</text>
+  <text x="715" y="280" fill="#c4b5fd" font-size="10">httpx</text>
+  <text x="715" y="465" fill="#c4b5fd" font-size="10">images / audio</text>
+
+  <!-- External Gemini callout -->
+  <g filter="url(#shad)">
+    <rect x="370" y="640" width="320" height="60" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.55"/>
+    <text x="530" y="668" text-anchor="middle" fill="#86efac" font-size="12" font-weight="600">Google Gemini API (cloud)</text>
+    <text x="530" y="686" text-anchor="middle" fill="#9898b0" font-size="11">Pro · Flash · Flash-Image · used by backend services</text>
+  </g>
+  <line x1="530" y1="610" x2="530" y2="640" stroke="#22c55e" stroke-width="2" marker-end="url(#arr)"/>
+</svg>
