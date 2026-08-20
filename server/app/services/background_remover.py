@@ -1,51 +1,51 @@
 import io
 
-from app.logger import logger
-
-try:
-    import onnxruntime as _ort
-    from rembg import new_session, remove as _rembg_remove
-    # Pin explicitly: rembg.remove()'s default model has changed across
-    # versions (it now defaults to "bria-rmbg", a ~1GB photoreal-segmentation
-    # model — massive overkill for cutting out flat anime-style sprites, and
-    # a multi-minute download on every cold start). "u2net" (~176MB) is what
-    # this was written against and is plenty for that job.
-    # Built once at import time — before any of the sprite-generation
-    # thread pool's workers start — so the model downloads/loads exactly
-    # once, not once per parallel worker racing the same cache miss.
-    # intra_op_num_threads=1: onnxruntime otherwise spreads each inference
-    # across all available cores by default: fine for one call at a time,
-    # but the pipeline already runs several of these concurrently
-    # (_PIPELINE_WORKERS), so uncapped per-call threading multiplies CPU/
-    # memory contention instead of adding real throughput.
-    _sess_opts = _ort.SessionOptions()
-    _sess_opts.intra_op_num_threads = 1
-    _SESSION = new_session("u2net", sess_opts=_sess_opts)
-    _REMBG_AVAILABLE = True
-except Exception as exc:  # pragma: no cover
-    logger.warning("rembg not available (%s); sprite background removal disabled", exc)
-    _REMBG_AVAILABLE = False
-
+import numpy as np
 from PIL import Image
 
+from app.logger import logger
 
-def remove_sprite_bg(image_bytes: bytes) -> bytes:
-    """Remove background from a sprite image. Returns RGBA PNG bytes.
+# Sprites are prompted to render on this flat color (see
+# prompts/sprite_generation.py) instead of asking Gemini for a transparent
+# background directly — image models comply with "transparent" inconsistently
+# (this is also why generate_character_overlays has to verify and discard
+# non-transparent results), whereas a distinct solid color is a well-defined,
+# reliably-followed instruction that a plain color-distance threshold can key
+# out afterward. Chosen because it rarely appears in character art.
+CHROMA_KEY_COLOR = (255, 0, 255)  # magenta
 
-    Falls back to the original image if rembg fails or is unavailable.
+
+def remove_sprite_bg(image_bytes: bytes, tolerance: int = 55, feather: int = 15) -> bytes:
+    """Key out the flat chroma-key background, returning RGBA PNG bytes.
+
+    Pure PIL/numpy color-distance thresholding — no ML model. Replaced an
+    rembg-based (ONNX segmentation) implementation that added ~700MB-1GB of
+    resident memory per instance (rembg's own import cost, independent of
+    which model file was loaded) and was the direct cause of repeated OOM
+    crashes in production on a 2GB instance. This is sub-second and adds
+    only the size of the image itself to memory.
+
+    The background color is sampled adaptively from the image's own border
+    pixels (median, robust to the odd stray artifact pixel) rather than
+    assumed to exactly match CHROMA_KEY_COLOR — image models don't always
+    render the requested hex value exactly.
     """
-    if not _REMBG_AVAILABLE:
-        return image_bytes
-
     try:
-        logger.info("Removing background from sprite...")
-        output_bytes = _rembg_remove(image_bytes, session=_SESSION)
-        # Re-encode as a clean PNG with alpha channel via Pillow
-        with Image.open(io.BytesIO(output_bytes)) as img:
+        with Image.open(io.BytesIO(image_bytes)) as img:
             img = img.convert("RGBA")
+            arr = np.array(img).astype(np.float64)
+            rgb = arr[:, :, :3]
+
+            border = np.concatenate([rgb[0, :], rgb[-1, :], rgb[:, 0], rgb[:, -1]])
+            bg = np.median(border, axis=0)
+
+            dist = np.sqrt(((rgb - bg) ** 2).sum(axis=2))
+            alpha = np.clip((dist - tolerance) / feather * 255, 0, 255)
+            arr[:, :, 3] = np.minimum(arr[:, :, 3], alpha)
+
+            out = Image.fromarray(arr.astype(np.uint8), "RGBA")
             buf = io.BytesIO()
-            img.save(buf, format="PNG", optimize=True)
-            logger.info("Background removed successfully")
+            out.save(buf, format="PNG", optimize=True)
             return buf.getvalue()
     except Exception as err:
         logger.error("Background removal failed, returning original image: %s", err)

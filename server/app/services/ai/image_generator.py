@@ -19,11 +19,10 @@ from app.services.background_remover import remove_sprite_bg
 
 # Gemini Image API tolerates a small amount of parallelism; 4 in flight is the
 # sweet spot for our pipeline (faster wall-clock without tripping rate limits).
-# Lowered from 4: generate_character_overlays runs this ×2 characters at once
-# (see animation_generator's outer pool), so this was 8-wide at peak — too
-# much concurrent image processing for a 2GB instance. Raise back toward 4
-# if the instance is bumped to a larger plan.
-_IMAGE_PARALLELISM = 2
+# (Was briefly dropped to 2 for the same reason as generation.py's
+# _PIPELINE_WORKERS — see that comment. Restored now that sprite background
+# removal no longer loads an ML model per instance.)
+_IMAGE_PARALLELISM = 4
 
 EXPRESSIONS = [
     "happy", "sad", "angry", "surprised", "neutral",
