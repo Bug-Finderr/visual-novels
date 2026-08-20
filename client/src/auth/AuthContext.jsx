@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { api, BASE } from '../lib/api.js';
 
 /* Auth state. Bootstraps from GET /api/v1/me (cookie-based). Login is a
  * full-page navigation to the backend Google flow; logout revokes the
@@ -29,8 +29,10 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   const login = useCallback(() => {
-    // Full-page nav (proxied to the backend), which 302s to Google.
-    window.location.href = '/api/v1/auth/google/login';
+    // Full-page nav straight to the backend (BASE is the real backend origin
+    // in prod, where there's no proxy between the static frontend and the
+    // API), which 302s to Google.
+    window.location.href = `${BASE}/auth/google/login`;
   }, []);
 
   const logout = useCallback(async () => {
