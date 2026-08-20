@@ -44,6 +44,7 @@ export default function UserMenu() {
             <Link to={`/u/${user.username}`} className="theme-pop__item" onClick={() => setOpen(false)}>Your profile</Link>
           )}
           <Link to="/library" className="theme-pop__item" onClick={() => setOpen(false)}>Your library</Link>
+          <Link to="/billing" className="theme-pop__item" onClick={() => setOpen(false)}>Credits</Link>
           <Link to="/settings" className="theme-pop__item" onClick={() => setOpen(false)}>Settings</Link>
           <button className="theme-pop__item" onClick={() => { setOpen(false); logout(); }}>Sign out</button>
         </div>

@@ -784,3 +784,85 @@ a.detail__author:hover b { color: var(--accent); text-decoration: underline; }
   .profile-cta { grid-column: 1 / -1; }
   .profile-avatar { width: 76px; height: 76px; font-size: 1.9rem; }
 }
+
+/* --------------------------------------------------------------------------
+   Billing — credit balance, packs, ledger
+   -------------------------------------------------------------------------- */
+.credit-balance {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: 1.4rem 1.6rem;
+}
+.credit-balance__count {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 2.6rem; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.credit-balance__unit {
+  font-family: var(--font-body);
+  font-size: 0.95rem; font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.pack-grid {
+  display: grid; gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-bottom: 1.25rem;
+}
+.pack { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.3rem; }
+.pack--selected { border-color: var(--accent); }
+.pack__name {
+  font-family: var(--font-display); font-size: 1.15rem;
+  letter-spacing: var(--display-letter); text-transform: var(--display-transform);
+}
+.pack__credits { color: var(--ink-soft); font-weight: 700; font-size: 0.9rem; }
+.pack__price {
+  font-family: var(--font-display); font-size: 1.9rem;
+  font-variant-numeric: tabular-nums; margin-top: 0.3rem;
+}
+.pack__unit { font-size: 0.8rem; margin-bottom: 0.9rem; }
+.pack .btn { margin-top: auto; }
+
+.ledger { padding: 0.25rem 0; }
+.ledger__row {
+  display: grid;
+  grid-template-columns: 1fr auto 4rem 4rem;
+  gap: 0.75rem; align-items: center;
+  padding: 0.75rem 1.3rem;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.ledger__row:last-child { border-bottom: none; }
+.ledger__reason { font-weight: 700; }
+.ledger__date { font-size: 0.85rem; }
+.ledger__delta { text-align: right; font-weight: 700; }
+.ledger__delta.is-credit { color: var(--mint, var(--accent)); }
+.ledger__delta.is-debit { color: var(--ink-soft); }
+.ledger__balance { text-align: right; font-size: 0.85rem; }
+
+/* Header balance chip */
+.credit-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft); color: var(--accent-ink);
+  font-weight: 700; font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.credit-chip:hover { box-shadow: var(--elev); }
+.credit-chip.is-empty { background: var(--danger-soft); color: var(--ink); }
+
+/* Long-form policy pages */
+.legal { line-height: 1.7; }
+.legal h2 { margin: 2rem 0 0.6rem; font-size: 1.15rem; }
+.legal p, .legal li { color: var(--ink-soft); }
+.legal ul { padding-left: 1.2rem; }
+.legal li { margin: 0.35rem 0; }
+.legal__updated { font-size: 0.85rem; }
+
+@media (max-width: 560px) {
+  .ledger__row { grid-template-columns: 1fr auto 3rem; }
+  .ledger__balance { display: none; }
+}

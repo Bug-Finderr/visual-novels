@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { useCredits, useRefreshCredits } from '../lib/credits.js';
 
 const GENRES = [
   'Fantasy', 'Sci-Fi', 'Romance', 'Horror', 'Mystery',
@@ -23,22 +24,39 @@ const EMPTY = {
 export default function Setup() {
   const navigate = useNavigate();
   const { user, googleEnabled, login, loading } = useAuth();
+  const { data: credits } = useCredits(!!user);
+  const refreshCredits = useRefreshCredits();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
+  const [outOfCredits, setOutOfCredits] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const upd = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  const billingOn = credits?.billingEnabled;
+  const balance = credits?.balance;
+  const cost = credits?.creditsPerStory ?? 1;
+  const broke = billingOn && balance !== undefined && balance < cost;
+
   async function onSubmit(e) {
     e.preventDefault();
     setError('');
+    setOutOfCredits(false);
     setSubmitting(true);
     try {
       const session = await api.post('/sessions', form);
       await api.post(`/sessions/${session.id}/generate`);
+      refreshCredits();
       navigate(`/loading/${session.id}`);
     } catch (err) {
-      setError(err.message || 'Something went wrong.');
+      // 402 is the out-of-credits signal from the generation gate. Send them
+      // somewhere useful rather than showing a raw error string.
+      if (/credit/i.test(err.message || '')) {
+        setOutOfCredits(true);
+        refreshCredits();
+      } else {
+        setError(err.message || 'Something went wrong.');
+      }
       setSubmitting(false);
     }
   }
@@ -69,6 +87,15 @@ export default function Setup() {
         <h1 className="display">Author a new tale</h1>
         <p>Every detail steers the story, the cast, and the art.</p>
       </div>
+
+      {broke && (
+        <div className="banner">
+          <span className="badge badge-error">no credits</span>
+          You're out of story credits.
+          <span className="spacer" />
+          <Link to="/billing" className="btn btn-sm btn-primary">Top up</Link>
+        </div>
+      )}
 
       <form onSubmit={onSubmit}>
         <div className="section-title">Premise <span className="rule" /></div>
@@ -156,11 +183,25 @@ export default function Setup() {
         </div>
 
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary btn-lg" disabled={submitting}>
+          <button type="submit" className="btn btn-primary btn-lg" disabled={submitting || broke}>
             <span className="btn-icon">✦</span> {submitting ? 'Creating…' : 'Weave the story'}
           </button>
+          {billingOn && (
+            <span className="muted" style={{ fontSize: '0.85rem' }}>
+              Costs {cost} {cost === 1 ? 'credit' : 'credits'}
+              {balance !== undefined && ` · you have ${balance}`}
+            </span>
+          )}
         </div>
 
+        {outOfCredits && (
+          <div className="banner">
+            <span className="badge badge-error">no credits</span>
+            You're out of story credits — nothing was charged.
+            <span className="spacer" />
+            <Link to="/billing" className="btn btn-sm btn-primary">Top up</Link>
+          </div>
+        )}
         {error && <div className="form-error">{error}</div>}
       </form>
     </div>
