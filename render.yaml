@@ -29,7 +29,16 @@ services:
           name: storyplex-db
           property: connectionString
       - key: ASSET_BACKEND
-        value: local
+        value: gcs
+      - key: GCS_BUCKET
+        value: storyplex-assets
+      # Render Blueprints can't declare Secret Files in YAML — add this once
+      # via the dashboard (Environment -> Secret Files -> path
+      # /etc/secrets/gcs-key.json, contents = the storyplex-render-assets
+      # service account's JSON key) before this env var resolves to anything
+      # useful. See DEPLOY-RENDER.md.
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/gcs-key.json
       - key: STORYGEN_ENGINE
         value: graph
       # storyplex-web and storyplex-api are different *.onrender.com hosts,
@@ -74,7 +83,7 @@ services:
       - key: VITE_API_BASE
         value: https://storyplex-api.onrender.com/api/v1
       - key: VITE_ASSET_BASE
-        value: https://storyplex-api.onrender.com/api/v1/assets
+        value: https://storage.googleapis.com/storyplex-assets
     routes:
       # SPA fallback for react-router — same rule as netlify.toml's redirect.
       - type: rewrite

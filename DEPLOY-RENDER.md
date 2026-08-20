@@ -8,14 +8,17 @@ Production topology:
     ├─────────────────────────────▶│ Render Static Site (client/dist)│
     │                                └──────────────────────────────┘
     │  REST + OAuth + WSS /api/v1  ┌────────────────────────────┐
-    └────────────────────────────▶│ Render Web Service (FastAPI)│──▶ Render Postgres
-                                    └────────────────────────────┘
+    ├────────────────────────────▶│ Render Web Service (FastAPI)│──▶ Render Postgres
+    │                               └────────────────────────────┘
+    │  images / audio (public URLs) ┌───────────────────────────┐
+    └─────────────────────────────▶│ GCS bucket (storyplex-assets)│
+                                    └───────────────────────────┘
 ```
 
 - **Frontend**: Render Static Site serves the Vite build. Free regardless of the backend's paid plan — CDN + managed TLS + custom domains (2 free per workspace) included. (Netlify works too, and `netlify.toml` is still in the repo for that — but org-owned private repos hit Netlify's paid-plan wall, which is why this doc defaults to Render for both.)
 - **Backend**: FastAPI on a Render Web Service (container in `server/Dockerfile`). Migrations run automatically on every boot (`alembic upgrade head` before `uvicorn` starts).
 - **DB**: Render-managed Postgres, same platform/network as the web service.
-- **Assets**: `ASSET_BACKEND=local` — generated images/audio are served straight off the web service's disk via `/api/v1/assets/...`. Simplest option, zero extra setup. They're **ephemeral**: a redeploy or restart wipes them (fine for a demo; add a Render Disk later if you need them to survive restarts — see the bottom of this doc).
+- **Assets**: `ASSET_BACKEND=gcs` — generated images/audio go to a **public** GCS bucket (`storyplex-assets`); the browser loads them straight from the bucket via `VITE_ASSET_BASE`, the backend only writes them. Survives redeploys/restarts (unlike the web service's own disk, which is ephemeral). Since Render isn't running on GCP, the backend authenticates with a service-account key rather than automatic credentials — see step 1a below.
 
 > Unlike the GCP path in `DEPLOY.md`, Render doesn't freeze CPU between requests, so the `--no-cpu-throttling` / single-instance dance that Cloud Run needs isn't a thing here — just don't use the free instance tier for the backend (it sleeps after 15 min idle) and don't turn on autoscaling (the in-memory generation-progress dict only lives on one instance).
 
@@ -29,7 +32,23 @@ Production topology:
 
 ---
 
-## 1. Deploy everything — via the `render.yaml` Blueprint
+## 1. GCS bucket + service account (one-time, before the Blueprint)
+
+The bucket and its access grant aren't declared in `render.yaml` (they're GCP resources, and the credential is a secret) — set these up once first:
+
+1. **Bucket**: `storyplex-assets` already exists (created for the earlier GCP deploy path in `DEPLOY.md`) with public read already granted (`allUsers: roles/storage.objectViewer`). Creating a fresh one, if you ever need to: `gcloud storage buckets create gs://<name> --location=<region> --uniform-bucket-level-access`, then `gcloud storage buckets add-iam-policy-binding gs://<name> --member=allUsers --role=roles/storage.objectViewer`.
+2. **Service account** (Render isn't on GCP, so it can't use automatic credentials the way Cloud Run does): create one scoped to just this bucket, not the whole project:
+   ```bash
+   gcloud iam service-accounts create storyplex-render-assets \
+     --display-name="StoryPlex Render backend - GCS asset access"
+   gcloud storage buckets add-iam-policy-binding gs://storyplex-assets \
+     --member="serviceAccount:storyplex-render-assets@<PROJECT_ID>.iam.gserviceaccount.com" \
+     --role="roles/storage.objectAdmin"
+   ```
+3. **Key**: `gcloud iam service-accounts keys create key.json --iam-account=storyplex-render-assets@<PROJECT_ID>.iam.gserviceaccount.com`. If this fails with `FAILED_PRECONDITION: Key creation is not allowed on this service account`, an org policy (`constraints/iam.disableServiceAccountKeyCreation`) is blocking it — an Organization Policy Administrator needs to run `gcloud resource-manager org-policies disable-enforce constraints/iam.disableServiceAccountKeyCreation --project=<PROJECT_ID>` to scope an exception to just this project (allow a minute or two for it to propagate before retrying the key creation).
+4. **Upload the key to Render as a Secret File** — this step can't be scripted into `render.yaml` (Blueprints don't support declaring Secret File contents in YAML). In the `storyplex-api` service → **Environment → Secret Files → Add Secret File**: path `/etc/secrets/gcs-key.json`, contents = the full JSON from `key.json`. Delete your local copy of `key.json` afterward — it's a live credential.
+
+## 2. Deploy everything — via the `render.yaml` Blueprint
 
 The repo root has a `render.yaml` that provisions the Postgres DB, the backend web service, **and** the frontend static site together, in one shot. The two services reference each other by their fixed names (`storyplex-api`, `storyplex-web`), so their URLs are predictable and pre-wired — no manual URL-copying between dashboards.
 
@@ -42,7 +61,8 @@ The repo root has a `render.yaml` that provisions the Postgres DB, the backend w
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
 5. Click **Apply**. Render provisions Postgres, builds+deploys the backend container (runs `alembic upgrade head` then starts `uvicorn`), and builds+deploys the static site (`npm install && npm run build` → publishes `client/dist`).
-6. Once both are live:
+6. Add the Secret File from step 1.4 if you haven't already — `GOOGLE_APPLICATION_CREDENTIALS` won't resolve to anything until that file exists, and asset uploads will fail (story generation will still complete, but sprites/backgrounds/audio won't save).
+7. Once both are live:
    - API: `https://storyplex-api.onrender.com`
    - App: `https://storyplex-web.onrender.com`
 
@@ -54,18 +74,18 @@ The repo root has a `render.yaml` that provisions the Postgres DB, the backend w
 
 ---
 
-## 2. Google OAuth client
+## 3. Google OAuth client
 
 In Google Cloud Console → **APIs & Services → Credentials → your OAuth client**, add:
 
 - **Authorized redirect URI**: `https://storyplex-api.onrender.com/api/v1/auth/google/callback`
 - **Authorized JavaScript origins**: `https://storyplex-web.onrender.com` and `https://storyplex-api.onrender.com`
 
-(Use the actual URLs from step 1.6 if either got a name-collision suffix.)
+(Use the actual URLs from step 2.7 if either got a name-collision suffix.)
 
 ---
 
-## 3. Post-deploy smoke test
+## 4. Post-deploy smoke test
 
 ```bash
 curl -s https://storyplex-api.onrender.com/api/v1/health
@@ -76,7 +96,7 @@ curl -s https://storyplex-api.onrender.com/api/v1/me
 
 If `googleAuthEnabled` is `false`, double-check the Google secrets landed in `storyplex-api`'s Environment tab.
 
-Then open `https://storyplex-web.onrender.com`, sign in with Google, create a story, hit Play — scene art/audio load from the backend, TTS streams over `wss://` directly to Render (a static site can't proxy WebSockets any more than Netlify could, which is why `VITE_API_BASE` points at the real backend origin, not a same-origin proxy path).
+Then open `https://storyplex-web.onrender.com`, sign in with Google, create a story, hit Play — scene art/audio load straight from the GCS bucket (`VITE_ASSET_BASE`), TTS streams over `wss://` directly to Render (a static site can't proxy WebSockets any more than Netlify could, which is why `VITE_API_BASE` points at the real backend origin, not a same-origin proxy path). If images 404 or never appear, check `storyplex-api`'s logs for GCS auth errors — usually means the Secret File from step 1.4 is missing or has the wrong path.
 
 ---
 
@@ -99,9 +119,9 @@ Then open `https://storyplex-web.onrender.com`, sign in with Google, create a st
 3. **New + → Static Site** → connect the same repo. Set:
    - **Build command**: `npm install && npm run build`
    - **Publish directory**: `client/dist`
-   - Env vars: `VITE_API_BASE` / `VITE_ASSET_BASE`, pointing at the web service's URL from step 2 (as in `render.yaml`'s `storyplex-web` block).
-4. Back in the web service, set `ALLOWED_ORIGINS` to the static site's URL from step 3, and `GOOGLE_REDIRECT_URI` to its own `/api/v1/auth/google/callback` — then continue from step 2 (Google OAuth client) above.
+   - Env vars: `VITE_API_BASE` (web service URL from step 2 + `/api/v1`) and `VITE_ASSET_BASE` (`https://storage.googleapis.com/storyplex-assets`).
+4. Back in the web service, set `ALLOWED_ORIGINS` to the static site's URL from step 3, and `GOOGLE_REDIRECT_URI` to its own `/api/v1/auth/google/callback` — then continue from step 1 (GCS bucket + service account) and step 3 (Google OAuth client) above.
 
-## Optional: persist generated assets across restarts
+## Local dev vs. this deploy
 
-Add a Render Disk to the web service (**Disks** tab): mount path `/app/data` (that's where `DATA_DIR`/`GENERATED_DIR` resolve inside the container — see `server/app/config.py`), a few GB. Generated sprites/backgrounds/audio then survive redeploys instead of regenerating each time. Not needed for a one-off demo.
+Nothing changes locally — `ASSET_BACKEND` defaults to `local` when unset, so `npm run dev` still serves generated assets off disk through Vite exactly as before. `ASSET_BACKEND=gcs` only needs to be set in the Render environment.
