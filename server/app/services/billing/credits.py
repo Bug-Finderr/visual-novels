@@ -21,6 +21,7 @@ SIGNUP_GRANT = "signup_grant"
 PURCHASE = "purchase"
 GENERATION = "generation"
 REFUND = "refund"
+REFUND_REVERSAL = "refund_reversal"
 ADMIN = "admin"
 
 
@@ -41,6 +42,7 @@ def apply(
     ref_type: str | None = None,
     ref_id: str | None = None,
     idempotency_key: str | None = None,
+    allow_negative: bool = False,
 ) -> int | None:
     """Move `user_id`'s balance by `delta` inside the CALLER'S transaction.
 
@@ -51,13 +53,21 @@ def apply(
     `idempotency_key` is UNIQUE on the ledger — pass one for anything that can
     be delivered twice (purchases) and the second attempt raises rather than
     double-crediting.
+
+    `allow_negative` lifts the floor, and exists for exactly one case: clawing
+    credits back after a refund. If the customer already spent them, the
+    balance SHOULD go negative — that is the honest record of what happened,
+    and it stops them generating again until they buy back in. Silently
+    absorbing the shortfall would hand out free stories.
     """
+    guard = "" if allow_negative else " AND balance + ? >= 0"
+    params = (delta, user_id) if allow_negative else (delta, user_id, delta)
     updated = conn.execute(
         "UPDATE credit_accounts"
         " SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP"
-        "  WHERE user_id = ? AND balance + ? >= 0"
+        f"  WHERE user_id = ?{guard}"
         " RETURNING balance",
-        (delta, user_id, delta),
+        params,
     ).fetchone()
     if not updated:
         return None

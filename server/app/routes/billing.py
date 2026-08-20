@@ -122,24 +122,44 @@ async def cashfree_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Malformed payload")
 
     data = body.get("data") or {}
-    order_id = ((data.get("order") or {}).get("order_id")) or ""
-    event_type = body.get("type")
+    event_type = body.get("type") or ""
+    # Refund events carry the order id under data.refund, payment events under
+    # data.order.
+    order_id = (
+        (data.get("order") or {}).get("order_id")
+        or (data.get("refund") or {}).get("order_id")
+        or ""
+    )
+    raw_text = raw.decode("utf-8", "replace")
 
     # Replayed signature -> already handled; ack so Cashfree stops retrying.
-    if not orders.record_webhook(signature, event_type, order_id, raw.decode("utf-8", "replace")):
+    if not orders.record_webhook(signature, event_type, order_id, raw_text):
         logger.info("billing: ignoring replayed webhook for order %s", order_id)
         return {"ok": True, "duplicate": True}
 
-    if order_id:
-        try:
-            # Re-reads the order from Cashfree rather than trusting the payload
-            # for whether (and how much) money moved.
+    try:
+        if event_type in ("REFUND_STATUS_WEBHOOK", "AUTO_REFUND_STATUS_WEBHOOK"):
+            # Refunds are raised from the Cashfree dashboard, so this is the
+            # only signal that money went back — without it the customer keeps
+            # the credits they were refunded for.
+            orders.apply_refund(body, raw_text)
+
+        elif event_type in ("PAYMENT_FAILED_WEBHOOK", "PAYMENT_USER_DROPPED_WEBHOOK"):
+            if order_id:
+                orders.record_failure(order_id, event_type, body)
+
+        elif order_id:
+            # Success (and anything unrecognised that names an order): re-read
+            # from Cashfree rather than trusting the payload that money moved.
             orders.sync_from_cashfree(order_id)
-        except (orders.BillingError, cashfree.CashfreeError) as err:
-            # 200 anyway: a retry would hit the same error, and the order can
-            # still be settled by the user's verify call or by hand.
-            logger.error("billing: webhook processing failed for %s: %s", order_id, err)
-            return {"ok": True, "processed": False}
+
+    except (orders.BillingError, cashfree.CashfreeError) as err:
+        # 200 anyway: a retry would hit the same error, and the order can still
+        # be settled by the user's verify call or by hand. The raw payload is
+        # already stored, so nothing is lost.
+        logger.error("billing: webhook processing failed for %s (%s): %s",
+                     order_id, event_type, err)
+        return {"ok": True, "processed": False}
 
     orders.mark_webhook_processed(signature)
     return {"ok": True}
