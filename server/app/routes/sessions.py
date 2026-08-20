@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth.deps import get_current_user, require_owner, require_readable
+from app.config import config
 from app.models.schemas import SessionCreateRequest, SessionPatchRequest
 from app.services import session_service
+from app.services.billing import credits
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
@@ -48,7 +50,11 @@ def get_scenes(session_id: str, _s: dict = Depends(require_readable)):
 
 
 @router.post("/{session_id}/continue", status_code=201)
-def continue_to_next_chapter(session_id: str, parent: dict = Depends(require_owner)):
+def continue_to_next_chapter(
+    session_id: str,
+    user: dict = Depends(get_current_user),
+    parent: dict = Depends(require_owner),
+):
     """Spawn a child session continuing from this one's chosen ending. The child
     inherits the owner. Requires the parent to have reached an ending."""
     if not parent.get("chosen_ending_id"):
@@ -56,4 +62,13 @@ def continue_to_next_chapter(session_id: str, parent: dict = Depends(require_own
             status_code=400,
             detail="Cannot continue — the previous chapter hasn't reached an ending yet.",
         )
+    # A continuation runs the same full pipeline as a new story, so it costs
+    # the same. Check up front rather than handing back a child session that
+    # would only 402 at /generate.
+    if config.BILLING_ENABLED and config.CREDITS_PER_GENERATION > 0:
+        if credits.balance(user["id"]) < config.CREDITS_PER_GENERATION:
+            raise HTTPException(
+                status_code=402,
+                detail="You're out of story credits. Top up to continue this story.",
+            )
     return session_service.create_continuation(parent)

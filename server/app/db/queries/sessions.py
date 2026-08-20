@@ -240,6 +240,21 @@ def update_status(session_id: str, status: str) -> None:
         )
 
 
+def claim_for_generation(conn, session_id: str) -> bool:
+    """Atomically move a session into 'generating', in the CALLER'S transaction.
+
+    Returns False if it wasn't claimable — already generating, or already
+    ready. The condition is in the WHERE clause rather than a preceding SELECT
+    so two concurrent /generate calls can't both pass the check and both start
+    a pipeline (and, now, both be charged).
+    """
+    return conn.execute(
+        "UPDATE sessions SET status = 'generating', updated_at = CURRENT_TIMESTAMP"
+        " WHERE id = ? AND status IN ('created', 'error')",
+        (session_id,),
+    ).rowcount == 1
+
+
 def update_engine(session_id: str, engine: str) -> None:
     """Record which story-generation engine actually produced this session."""
     with db() as conn:
