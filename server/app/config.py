@@ -96,6 +96,35 @@ class Config(BaseSettings):
     SESSION_COOKIE_SECURE: bool = False
     SESSION_COOKIE_SAMESITE: str = "lax"  # 'lax' | 'strict' | 'none'
 
+    # --- Billing: prepaid credits + Cashfree (INR) ----------------------
+    # Master switch. OFF by default so the schema, routes and UI can ship
+    # (and be tested) without paywalling the live site while Cashfree KYC is
+    # pending — when False, /generate skips the debit entirely.
+    BILLING_ENABLED: bool = False
+    # Credits granted once, on first read of a user's credit account. Lazy
+    # rather than at signup so existing accounts get backfilled too.
+    FREE_STORY_CREDITS: int = 2
+    # Credits burned per story generation (and per chapter continuation).
+    CREDITS_PER_GENERATION: int = 1
+    # Refund the credit when the generation pipeline errors out. Off by
+    # default (each attempt is charged); flip on during a Gemini outage
+    # rather than shipping a code change.
+    REFUND_ON_GENERATION_FAILURE: bool = False
+
+    CASHFREE_ENV: str = "sandbox"          # 'sandbox' | 'production'
+    CASHFREE_APP_ID: str | None = None
+    CASHFREE_SECRET_KEY: str | None = None
+    # Webhook signatures are signed with the secret key; split only if
+    # Cashfree ever issues a distinct webhook secret.
+    CASHFREE_WEBHOOK_SECRET: str | None = None
+    CASHFREE_API_VERSION: str = "2026-01-01"
+    CASHFREE_TIMEOUT: float = 30
+    # Where the SPA lives — used to build the post-checkout return URL.
+    # Defaults to the first CORS origin, which is already the frontend.
+    PUBLIC_WEB_BASE: str | None = None
+    # Public origin of THIS API, for the Cashfree webhook (notify_url).
+    PUBLIC_API_BASE: str | None = None
+
     models: Models = Models()
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
@@ -118,7 +147,10 @@ class Config(BaseSettings):
             return "postgresql+psycopg://" + v[len("postgresql://"):]
         return v
 
-    @field_validator("STORYGEN_ENGINE", "ASSET_BACKEND", "SESSION_COOKIE_SAMESITE", mode="after")
+    @field_validator(
+        "STORYGEN_ENGINE", "ASSET_BACKEND", "SESSION_COOKIE_SAMESITE", "CASHFREE_ENV",
+        mode="after",
+    )
     @classmethod
     def _normalize_engine(cls, v: str) -> str:
         return v.strip().lower()
@@ -136,6 +168,21 @@ class Config(BaseSettings):
     @property
     def google_oauth_enabled(self) -> bool:
         return bool(self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET)
+
+    @property
+    def cashfree_configured(self) -> bool:
+        return bool(self.CASHFREE_APP_ID and self.CASHFREE_SECRET_KEY)
+
+    @property
+    def cashfree_webhook_secret(self) -> str | None:
+        return self.CASHFREE_WEBHOOK_SECRET or self.CASHFREE_SECRET_KEY
+
+    @property
+    def web_base(self) -> str:
+        """Origin of the SPA — the post-checkout return URL is built off this."""
+        if self.PUBLIC_WEB_BASE:
+            return self.PUBLIC_WEB_BASE.rstrip("/")
+        return (self.ALLOWED_ORIGINS[0] if self.ALLOWED_ORIGINS else "http://localhost:3000").rstrip("/")
 
 
 config = Config()

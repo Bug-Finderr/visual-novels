@@ -22,7 +22,7 @@ from app.config import config
 from app.db.database import init_database
 from app.logger import logger
 from app.routes import (
-    assets, gameplay, generation, library, saves, sessions, social, tts_stream,
+    assets, billing, gameplay, generation, library, saves, sessions, social, tts_stream,
 )
 
 API_PREFIX = "/api/v1"
@@ -32,6 +32,7 @@ API_PREFIX = "/api/v1"
 # composition root declarative.
 _ROUTERS = (
     auth_router,
+    billing.router,
     library.router,
     social.router,
     sessions.router,

@@ -249,3 +249,75 @@ class Follow(Base):
     follower_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     followee_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+# ======================================================================
+# Billing — prepaid credits + Cashfree orders.
+#
+# One credit == one story generation (~Rs.110 of Gemini spend), debited at
+# the /generate gate. `credit_accounts.balance` is authoritative and is only
+# ever moved by a conditional UPDATE (`... WHERE balance >= n`), so a
+# concurrent double-spend loses the race instead of going negative;
+# `credit_ledger` is the append-only audit of every movement.
+# ======================================================================
+class CreditAccount(Base):
+    __tablename__ = "credit_accounts"
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    balance = Column(Integer, nullable=False, server_default="0")
+    lifetime_purchased = Column(Integer, nullable=False, server_default="0")
+    # Free signup grant, recorded so it can only ever be handed out once —
+    # even if the configured grant size changes later.
+    free_granted = Column(Integer, nullable=False, server_default="0")
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CreditLedger(Base):
+    __tablename__ = "credit_ledger"
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    delta = Column(Integer, nullable=False)          # +n granted/purchased/refunded, -n spent
+    reason = Column(String, nullable=False)          # signup_grant|purchase|generation|refund|admin
+    balance_after = Column(Integer, nullable=False)
+    ref_type = Column(String)                        # 'order' | 'session'
+    ref_id = Column(String)
+    # Purchases set 'order:{order_id}' so a webhook replay (or a webhook
+    # racing the return-url verify) can never credit twice. Spends leave it
+    # NULL — Postgres UNIQUE ignores NULLs, and one session may legitimately
+    # be charged more than once across retries.
+    idempotency_key = Column(String, unique=True)
+    created_at = Column(DateTime, server_default=func.now())
+    __table_args__ = (Index("idx_credit_ledger_user_created", "user_id", "created_at"),)
+
+
+class PaymentOrder(Base):
+    __tablename__ = "payment_orders"
+    order_id = Column(String, primary_key=True)      # ours: 'sp_<uuid4hex>'
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    pack_id = Column(String, nullable=False)
+    # credits + price are SNAPSHOT at order time: repricing a pack must not
+    # change what an in-flight order settles at.
+    credits = Column(Integer, nullable=False)
+    amount_paise = Column(Integer, nullable=False)   # paise, never float
+    currency = Column(String, nullable=False, server_default="INR")
+    status = Column(String, nullable=False, server_default="created")  # created|paid|failed|expired
+    customer_phone = Column(String)                  # Cashfree requires one per order
+    cf_order_id = Column(String)
+    payment_session_id = Column(Text)
+    cf_payment_id = Column(String)
+    credited_at = Column(DateTime)                   # non-null == credits granted
+    raw_status_payload = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class WebhookEvent(Base):
+    """Received Cashfree webhooks, kept for replay protection + forensics."""
+    __tablename__ = "webhook_events"
+    id = Column(String, primary_key=True, default=_uuid)
+    signature = Column(String, nullable=False, unique=True)  # natural dedupe key
+    event_type = Column(String)
+    order_id = Column(String)
+    payload = Column(Text)
+    received_at = Column(DateTime, server_default=func.now())
+    processed_at = Column(DateTime)

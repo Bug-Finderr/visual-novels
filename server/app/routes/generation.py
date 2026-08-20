@@ -7,8 +7,10 @@ from typing import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.auth.deps import require_owner, require_readable
+from app.auth.deps import get_current_user, require_owner, require_readable
 
+from app.config import config
+from app.db.database import db
 from app.db.queries import beat_expansions as beat_expansions_queries
 from app.db.queries import characters as character_queries
 from app.db.queries import ending_dialogue as ending_dialogue_queries
@@ -17,6 +19,7 @@ from app.db.queries import sessions as session_queries
 from app.logger import logger
 from app.services import animation_generator, asset_manager, session_service, script_builder, tts_generator
 from app.services.ai import image_generator, story_generator
+from app.services.billing import credits
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["generation"])
 
@@ -413,30 +416,91 @@ def _run_pipeline(session_id: str, session: dict) -> None:
     logger.info("Generation complete for session %s", session_id)
 
 
-async def _pipeline_runner(session_id: str, session: dict) -> None:
+async def _pipeline_runner(session_id: str, session: dict, user_id: str | None = None) -> None:
     try:
         await asyncio.to_thread(_run_pipeline, session_id, session)
     except Exception as err:
         logger.exception("Generation pipeline failed: %s", err)
         session_service.update_status(session_id, "error")
         _set_progress(session_id, step="error", progress=0, details=str(err))
+        # Off by default — each attempt is charged, including retries after a
+        # failure. Turn REFUND_ON_GENERATION_FAILURE on (no redeploy of logic
+        # needed) when an upstream outage is burning users' credits.
+        if config.REFUND_ON_GENERATION_FAILURE and config.BILLING_ENABLED and user_id:
+            cost = max(0, int(config.CREDITS_PER_GENERATION))
+            if cost:
+                try:
+                    credits.refund(user_id, cost, ref_type="session", ref_id=session_id)
+                    logger.info("billing: refunded %d credit(s) to %s after failed generation of %s",
+                                cost, user_id, session_id)
+                except Exception:
+                    logger.exception("billing: refund failed for session %s", session_id)
+
+
+def _claim_and_charge(session_id: str, user_id: str) -> str | None:
+    """Take the generation slot and pay for it in ONE transaction.
+
+    Returns None on success, or an error code ('busy' | 'insufficient') — and
+    on either failure the whole transaction rolls back, so a user who can't
+    pay does not end up with a session stuck in 'generating'.
+
+    Both steps are conditional writes decided by Postgres, which is what makes
+    this safe against a double-click or two tabs: the loser sees rowcount 0.
+    """
+    with db() as conn:
+        if not session_queries.claim_for_generation(conn, session_id):
+            return "busy"
+
+        if not config.BILLING_ENABLED:
+            return None
+
+        cost = max(0, int(config.CREDITS_PER_GENERATION))
+        if cost == 0:
+            return None
+
+        credits.ensure_account(conn, user_id)
+        charged = credits.apply(
+            conn, user_id, -cost, credits.GENERATION,
+            ref_type="session", ref_id=session_id,
+        )
+        if charged is None:
+            # Rolls back the status claim too — they keep a 'created' session
+            # they can retry once they've topped up.
+            raise _InsufficientCredits()
+    return None
+
+
+class _InsufficientCredits(Exception):
+    """Raised inside the charge transaction to force a rollback; translated to
+    a 402 by the caller once the transaction has unwound."""
 
 
 @router.post("/{session_id}/generate")
-async def start_generation(session_id: str, _s: dict = Depends(require_owner)):
+async def start_generation(session_id: str, user: dict = Depends(get_current_user),
+                           _s: dict = Depends(require_owner)):
     session = session_service.get_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session["status"] not in ("created", "error"):
+
+    try:
+        problem = _claim_and_charge(session_id, user["id"])
+    except _InsufficientCredits:
         raise HTTPException(
-            status_code=400,
-            detail=f"Session status is '{session['status']}', expected 'created'",
+            status_code=402,
+            detail="You're out of story credits. Top up to keep writing.",
         )
 
-    session_service.update_status(session_id, "generating")
+    if problem == "busy":
+        # Re-read: the session either is already running or has finished.
+        current = session_service.get_by_id(session_id) or session
+        raise HTTPException(
+            status_code=409 if current["status"] == "generating" else 400,
+            detail=f"Session status is '{current['status']}', expected 'created'",
+        )
+
     _set_progress(session_id, step="starting", progress=0, details="Starting generation...")
 
-    asyncio.create_task(_pipeline_runner(session_id, session))
+    asyncio.create_task(_pipeline_runner(session_id, session, user["id"]))
     return {"status": "started", "sessionId": session_id}
 
 

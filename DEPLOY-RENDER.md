@@ -108,6 +108,65 @@ Then open `https://storyplex.app`, sign in with Google, create a story, hit Play
 
 ---
 
+## 6. Billing — Cashfree Payment Gateway
+
+Billing ships **switched off** (`BILLING_ENABLED=0`), so everything below can wait until the merchant account is live. Until you flip it, generation is free and no credits are debited.
+
+### 6.1 Sandbox first (no KYC needed)
+
+Cashfree issues sandbox credentials the moment you sign up, before any verification. Use them to test the whole flow end to end.
+
+1. Sign up at [merchant.cashfree.com](https://merchant.cashfree.com) → switch the dashboard to **Sandbox** (top-right toggle).
+2. **Developers → API Keys** → copy the **App ID** and **Secret Key**.
+3. In Render → `storyplex-api` → **Environment**, set:
+   - `CASHFREE_APP_ID` and `CASHFREE_SECRET_KEY` = the sandbox pair
+   - `CASHFREE_ENV` = `sandbox`
+   - `BILLING_ENABLED` = `1`
+4. **Developers → Webhooks → Add Webhook Endpoint**: `https://api.storyplex.app/api/v1/billing/webhook/cashfree`, subscribed to the payment events. Cashfree signs each delivery; the endpoint rejects anything whose HMAC doesn't verify.
+5. Buy the ₹199 pack on `https://storyplex.app/billing` with a [sandbox test instrument](https://www.cashfree.com/docs/payments/online/testing) — the balance should tick up before you're even back on the return page.
+
+### 6.2 Going live
+
+Production keys are only issued after KYC. Have ready:
+
+- **PAN** — a personal PAN is accepted if you have no business PAN (register as an Individual).
+- **Bank account proof** — cancelled cheque or a statement showing name, account number and IFSC. Must match the PAN holder.
+- **Aadhaar linked to your phone number.**
+
+Activation also requires these pages live on the site — they ship in this repo, so just confirm they load: [`/legal/terms`](https://storyplex.app/legal/terms), [`/legal/privacy`](https://storyplex.app/legal/privacy), [`/legal/refunds`](https://storyplex.app/legal/refunds), [`/legal/contact`](https://storyplex.app/legal/contact), and visible pricing at [`/billing`](https://storyplex.app/billing). Cashfree can **deactivate an already-live account** if these later go missing.
+
+> Update `CONTACT_EMAIL` in `client/src/pages/legal/Legal.jsx` to an address you actually monitor before submitting for review — it's `support@storyplex.app` right now, and Cashfree does check that support contacts work.
+
+Once approved: swap `CASHFREE_APP_ID`/`CASHFREE_SECRET_KEY` for the production pair, set `CASHFREE_ENV=production`, and re-register the webhook on the production dashboard (sandbox and production keep separate webhook config).
+
+### 6.3 Knobs
+
+| Variable | Default | What it does |
+|---|---|---|
+| `BILLING_ENABLED` | `0` | Master switch. `0` = generation is free, no debits. |
+| `FREE_STORY_CREDITS` | `2` | Granted once, on first touch of a user's account. Changing it never re-grants to existing users. |
+| `CREDITS_PER_GENERATION` | `1` | Credits burned per story (and per chapter continuation). |
+| `REFUND_ON_GENERATION_FAILURE` | `0` | `1` hands the credit back when the pipeline errors. Flip during a Gemini outage. |
+
+Every credit movement is in `credit_ledger`, so a disputed balance is answerable with one query:
+
+```sql
+SELECT created_at, delta, reason, balance_after, ref_id
+FROM credit_ledger WHERE user_id = '<id>' ORDER BY created_at DESC;
+```
+
+To settle an order by hand (payment took, credits didn't — should be impossible, but):
+
+```sql
+-- confirm it really is unsettled first
+SELECT order_id, status, credits, amount_paise, credited_at
+FROM payment_orders WHERE order_id = 'sp_...';
+```
+
+then re-run the user's verify from the billing page, or POST the order id back through `/api/v1/billing/orders/{order_id}/verify` — it's idempotent, so a duplicate can't over-credit.
+
+---
+
 ## Cookies note
 
 `storyplex.app` and `api.storyplex.app` share one registrable domain, so the session cookie is same-site — `SESSION_COOKIE_SAMESITE=lax` + `SESSION_COOKIE_SECURE=1`, no reliance on third-party cookies. (Earlier, before the custom domain was wired up, this ran on the raw `*.onrender.com` URLs for both services, which are different sites from the cookie's perspective — that needed `SameSite=none`, which works but depends on third-party cookies Safari blocks and Chrome is phasing out. If you ever go back to testing on the bare `onrender.com` URLs, switch this back to `none`.)
