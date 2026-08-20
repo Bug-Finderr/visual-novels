@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/><stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Irodori TTS — Voice Synthesis Pipeline</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">Aratako/Irodori-TTS-500M-v2-VoiceDesign · Rectified-Flow DiT 500M + DACVAE · Japanese-only</text>
+
+  <!-- Inputs -->
+  <g filter="url(#sh)">
+    <rect x="40" y="110" width="320" height="120" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="60" y="138" fill="#a78bfa" font-size="12" font-weight="700">INPUT 1 · Japanese text</text>
+    <text x="60" y="160" fill="#e8e8f0" font-size="13">「アイコちゃん、いらっしゃい。」</text>
+    <text x="60" y="180" fill="#9898b0" font-size="11">comes from openingScript.statements[i].jp</text>
+    <text x="60" y="196" fill="#9898b0" font-size="11">  (Gemini was prompted to emit jp per line)</text>
+    <text x="60" y="216" fill="#9898b0" font-size="11">supports emoji style/SFX annotations</text>
+  </g>
+  <g filter="url(#sh)">
+    <rect x="40" y="250" width="320" height="160" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="60" y="278" fill="#a78bfa" font-size="12" font-weight="700">INPUT 2 · voice caption (JP)</text>
+    <text x="60" y="300" fill="#e8e8f0" font-size="12">穏やかで温かみのある60代の女性の声。</text>
+    <text x="60" y="318" fill="#e8e8f0" font-size="12">ゆっくりとした口調で、優しく話す。</text>
+    <text x="60" y="338" fill="#9898b0" font-size="11">comes from character.voice_caption</text>
+    <text x="60" y="354" fill="#9898b0" font-size="11">prompt requires explicit gender + age:</text>
+    <text x="60" y="370" fill="#9898b0" font-size="11">  男性 / 女性 / 男の子 / 女の子 / 中年男性 / …</text>
+    <text x="60" y="388" fill="#9898b0" font-size="11">→ each character gets a distinct voice</text>
+    <text x="60" y="404" fill="#9898b0" font-size="11">  with no reference audio (no_ref=True)</text>
+  </g>
+
+  <!-- arrow -->
+  <line x1="370" y1="270" x2="430" y2="270" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- DiT inference -->
+  <g filter="url(#sh)">
+    <rect x="430" y="170" width="350" height="270" rx="10" fill="#0a1a25" stroke="#06b6d4"/>
+    <text x="605" y="200" text-anchor="middle" fill="#67e8f9" font-size="13" font-weight="700">Rectified-Flow DiT (500M params, bf16)</text>
+
+    <text x="450" y="230" fill="#e8e8f0" font-size="11" font-weight="600">tokenize(text) + encode(caption)</text>
+    <text x="450" y="246" fill="#9898b0" font-size="11">→ conditioning vectors</text>
+
+    <text x="450" y="270" fill="#e8e8f0" font-size="11" font-weight="600">RF-DiT denoise (40 steps default)</text>
+    <text x="450" y="286" fill="#9898b0" font-size="11">CFG scales · text=3.0 caption=3.0 speaker=5.0</text>
+    <text x="450" y="302" fill="#9898b0" font-size="11">"independent" guidance mode</text>
+
+    <text x="450" y="326" fill="#e8e8f0" font-size="11" font-weight="600">→ 32-dim DACVAE latent sequence</text>
+    <text x="450" y="342" fill="#9898b0" font-size="11">  (sequential decode, &lt;= 30s of audio)</text>
+
+    <text x="450" y="370" fill="#e8e8f0" font-size="11" font-weight="600">DACVAE decoder (Aratako/Semantic-DACVAE-Japanese-32dim)</text>
+    <text x="450" y="386" fill="#9898b0" font-size="11">latent → 48 kHz waveform reconstruction</text>
+
+    <text x="450" y="416" fill="#22c55e" font-size="11">≈ 1 s wall-clock for ≈ 7 s of audio (~7× real-time)</text>
+  </g>
+
+  <!-- arrow out -->
+  <line x1="780" y1="305" x2="840" y2="305" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Output -->
+  <g filter="url(#sh)">
+    <rect x="840" y="170" width="320" height="270" rx="10" fill="#0f1f0f" stroke="#22c55e"/>
+    <text x="1000" y="200" text-anchor="middle" fill="#86efac" font-size="13" font-weight="700">OUTPUT · WAV bytes</text>
+    <text x="860" y="226" fill="#e8e8f0" font-size="12">48 kHz · mono · 16-bit PCM</text>
+    <text x="860" y="246" fill="#9898b0" font-size="11">FastAPI returns audio/wav with headers:</text>
+    <text x="870" y="262" fill="#c4b5fd" font-size="11">X-Sample-Rate: 48000</text>
+    <text x="870" y="278" fill="#c4b5fd" font-size="11">X-Inference-Ms: 951.7</text>
+
+    <text x="860" y="310" fill="#e8e8f0" font-size="12" font-weight="600">Backend persistence</text>
+    <text x="860" y="328" fill="#9898b0" font-size="11">key = sha1("speaker:expr text")[:16]</text>
+    <text x="860" y="344" fill="#9898b0" font-size="11">audio/&lt;key&gt;.wav</text>
+    <text x="860" y="360" fill="#9898b0" font-size="11">manifest.json incrementally updated:</text>
+    <text x="870" y="378" fill="#c4b5fd" font-size="11">{ "&lt;script_string&gt;": "&lt;key&gt;.wav" }</text>
+
+    <text x="860" y="406" fill="#e8e8f0" font-size="12" font-weight="600">Frontend lookup</text>
+    <text x="860" y="424" fill="#9898b0" font-size="11">fetch manifest once → exact-string match</text>
+  </g>
+
+  <!-- Bottom: per-line generation context -->
+  <g filter="url(#sh)">
+    <rect x="40" y="470" width="1120" height="220" rx="12" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.45"/>
+    <text x="60" y="498" fill="#c4b5fd" font-size="13" font-weight="700">Where TTS gets called</text>
+
+    <text x="60" y="528" fill="#e8e8f0" font-size="12" font-weight="600">A · Generation pipeline (initial script)</text>
+    <text x="60" y="546" fill="#9898b0" font-size="11">tts_generator.generate_for_opening_script(session_id, openingScript)</text>
+    <text x="60" y="562" fill="#9898b0" font-size="11">iterates dialogue + narration with jp field, synthesizes ~20 lines (~30 s)</text>
+
+    <text x="60" y="592" fill="#e8e8f0" font-size="12" font-weight="600">B · Runtime gameplay (post choice / free-input)</text>
+    <text x="60" y="610" fill="#9898b0" font-size="11">tts_generator.generate_for_statements(session_id, ai_output.statements) inside /choice handler</text>
+    <text x="60" y="626" fill="#9898b0" font-size="11">audioManifest delta returned in same response → frontend merges into _voiceManifest</text>
+
+    <text x="60" y="656" fill="#e8e8f0" font-size="12" font-weight="600">C · Resilience</text>
+    <text x="60" y="674" fill="#9898b0" font-size="11">If TTS_URL is unset OR a single call fails: backend continues silently; frontend falls back to muted</text>
+  </g>
+</svg>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
+import { assetUrl } from '../lib/assets.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import Avatar from '../components/Avatar.jsx';
 
@@ -117,7 +118,7 @@ export default function StoryDetail() {
       <div className="detail">
         <div className="detail__cover">
           <img
-            src={`/game-assets/${s.id}/cover.png`}
+            src={assetUrl(`${s.id}/cover.png`)}
             alt=""
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />

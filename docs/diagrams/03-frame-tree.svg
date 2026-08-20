@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/><stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Per-Character Asset Tree</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">1 Gemini sprite → derive 39 more frames + N voices · ~10× cheaper than per-emotion Gemini</text>
+
+  <!-- Root: character dir -->
+  <g filter="url(#sh)">
+    <rect x="40" y="110" width="350" height="56" rx="10" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="60" y="135" fill="#e8e8f0" font-size="13" font-weight="700">data/generated/&lt;sid&gt;/characters/&lt;cid&gt;/</text>
+    <text x="60" y="156" fill="#9898b0" font-size="11">e.g. characters/sasaki_haru/ — 40 PNGs</text>
+  </g>
+
+  <!-- Neutral box (Gemini) -->
+  <g filter="url(#sh)">
+    <rect x="40" y="200" width="350" height="80" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.6"/>
+    <text x="60" y="226" fill="#86efac" font-size="13" font-weight="700">neutral.png  ←  Gemini 2.5 Flash Image</text>
+    <text x="60" y="245" fill="#9898b0" font-size="11">864×1184 RGBA · the character's pristine portrait</text>
+    <text x="60" y="261" fill="#9898b0" font-size="11">post-processed by rembg (U²-Net) → transparent BG</text>
+    <text x="60" y="277" fill="#9898b0" font-size="11">SOURCE for everything below</text>
+  </g>
+
+  <!-- arrow down -->
+  <line x1="215" y1="285" x2="215" y2="320" stroke="#a78bfa" stroke-width="2"/>
+  <polygon points="210,318 220,318 215,328" fill="#a78bfa"/>
+
+  <!-- Animation gen box -->
+  <g filter="url(#sh)">
+    <rect x="40" y="330" width="350" height="100" rx="10" fill="#1a132a" stroke="#7c3aed"/>
+    <text x="60" y="356" fill="#a78bfa" font-size="13" font-weight="700">animation_generator.py</text>
+    <text x="60" y="376" fill="#9898b0" font-size="11">crop face from neutral (top ~30%, centered) →</text>
+    <text x="60" y="392" fill="#9898b0" font-size="11">512×512 input · upload once to puppeteer ·</text>
+    <text x="60" y="408" fill="#9898b0" font-size="11">10 batched calls (1 per emotion, 4 frames each)</text>
+    <text x="60" y="424" fill="#9898b0" font-size="11">composite face back over pristine body</text>
+  </g>
+
+  <!-- Generated frames table -->
+  <g>
+    <rect x="430" y="110" width="730" height="500" rx="12" fill="#11111e" stroke="#7c3aed" stroke-opacity="0.4"/>
+    <text x="450" y="138" fill="#c4b5fd" font-size="13" font-weight="700">10 emotions × 4 frames = 40 PNGs (per character)</text>
+
+    <!-- Header row -->
+    <g font-size="11" fill="#9898b0" text-anchor="middle">
+      <text x="610" y="170">base</text>
+      <text x="740" y="170">_blink</text>
+      <text x="870" y="170">_mouth_half</text>
+      <text x="1000" y="170">_mouth_open</text>
+    </g>
+
+    <!-- Row template -->
+    <g font-size="11">
+      <text x="450" y="200" fill="#e8e8f0" font-weight="600">neutral</text>
+      <text x="450" y="225" fill="#e8e8f0" font-weight="600">happy</text>
+      <text x="450" y="250" fill="#e8e8f0" font-weight="600">sad</text>
+      <text x="450" y="275" fill="#e8e8f0" font-weight="600">angry</text>
+      <text x="450" y="300" fill="#e8e8f0" font-weight="600">surprised</text>
+      <text x="450" y="325" fill="#e8e8f0" font-weight="600">embarrassed</text>
+      <text x="450" y="350" fill="#e8e8f0" font-weight="600">thinking</text>
+      <text x="450" y="375" fill="#e8e8f0" font-weight="600">scared</text>
+      <text x="450" y="400" fill="#e8e8f0" font-weight="600">determined</text>
+      <text x="450" y="425" fill="#e8e8f0" font-weight="600">smug</text>
+    </g>
+
+    <!-- 10x4 grid of dots representing files -->
+    <g>
+      <!-- columns at x=610,740,870,1000; rows at y=200..425 step 25 -->
+      <g fill="#7c3aed">
+        <!-- neutral row: base is from gemini (green) -->
+        <circle cx="610" cy="196" r="6" fill="#22c55e"/>
+        <circle cx="740" cy="196" r="6"/>
+        <circle cx="870" cy="196" r="6"/>
+        <circle cx="1000" cy="196" r="6"/>
+
+        <circle cx="610" cy="221" r="6"/><circle cx="740" cy="221" r="6"/><circle cx="870" cy="221" r="6"/><circle cx="1000" cy="221" r="6"/>
+        <circle cx="610" cy="246" r="6"/><circle cx="740" cy="246" r="6"/><circle cx="870" cy="246" r="6"/><circle cx="1000" cy="246" r="6"/>
+        <circle cx="610" cy="271" r="6"/><circle cx="740" cy="271" r="6"/><circle cx="870" cy="271" r="6"/><circle cx="1000" cy="271" r="6"/>
+        <circle cx="610" cy="296" r="6"/><circle cx="740" cy="296" r="6"/><circle cx="870" cy="296" r="6"/><circle cx="1000" cy="296" r="6"/>
+        <circle cx="610" cy="321" r="6"/><circle cx="740" cy="321" r="6"/><circle cx="870" cy="321" r="6"/><circle cx="1000" cy="321" r="6"/>
+        <circle cx="610" cy="346" r="6"/><circle cx="740" cy="346" r="6"/><circle cx="870" cy="346" r="6"/><circle cx="1000" cy="346" r="6"/>
+        <circle cx="610" cy="371" r="6"/><circle cx="740" cy="371" r="6"/><circle cx="870" cy="371" r="6"/><circle cx="1000" cy="371" r="6"/>
+        <circle cx="610" cy="396" r="6"/><circle cx="740" cy="396" r="6"/><circle cx="870" cy="396" r="6"/><circle cx="1000" cy="396" r="6"/>
+        <circle cx="610" cy="421" r="6"/><circle cx="740" cy="421" r="6"/><circle cx="870" cy="421" r="6"/><circle cx="1000" cy="421" r="6"/>
+      </g>
+    </g>
+
+    <!-- Legend -->
+    <g transform="translate(450, 460)">
+      <circle cx="6" cy="0" r="6" fill="#22c55e"/>
+      <text x="22" y="4" fill="#9898b0" font-size="11">Gemini (1 call/character)</text>
+      <circle cx="220" cy="0" r="6" fill="#7c3aed"/>
+      <text x="236" y="4" fill="#9898b0" font-size="11">THA3 face composite (1 batch/emotion)</text>
+    </g>
+
+    <text x="450" y="510" fill="#9898b0" font-size="11">PLUS audio for spoken lines:</text>
+    <text x="450" y="528" fill="#e8e8f0" font-size="11" font-weight="600">data/generated/&lt;sid&gt;/audio/</text>
+    <text x="450" y="546" fill="#9898b0" font-size="11">  &lt;sha1-of-script-string&gt;.wav  (Irodori, 48 kHz mono)</text>
+    <text x="450" y="562" fill="#9898b0" font-size="11">  manifest.json  →  rendered-script-string : filename</text>
+
+    <text x="450" y="590" fill="#9898b0" font-size="11">Cost ratio: backend pays 1 Gemini Image + 10 GPU batches</text>
+    <text x="450" y="606" fill="#9898b0" font-size="11">vs. 10 Gemini Image calls in the original (pre-pivot) design.</text>
+  </g>
+
+  <!-- Bottom note -->
+  <g filter="url(#sh)">
+    <rect x="40" y="620" width="350" height="80" rx="10" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.4"/>
+    <text x="60" y="645" fill="#c4b5fd" font-size="12" font-weight="600">Why 4 frames per emotion?</text>
+    <text x="60" y="664" fill="#9898b0" font-size="11">base = idle pose for that emotion</text>
+    <text x="60" y="678" fill="#9898b0" font-size="11">_blink = eyes-closed for the blink animation</text>
+    <text x="60" y="692" fill="#9898b0" font-size="11">_mouth_half / _mouth_open = mouth-flap during dialogue</text>
+  </g>
+</svg>

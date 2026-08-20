@@ -179,11 +179,10 @@ def generate_character_overlays(
     rejected; the rig then runs motion-only for that character.
     """
     if neutral_image is None:
-        neutral_path = asset_manager.get_character_sprite_path(session_id, character["id"], "neutral")
-        if not neutral_path.exists():
+        neutral_image = asset_manager.read_character_sprite(session_id, character["id"], "neutral")
+        if neutral_image is None:
             logger.warning("no neutral sprite for %s; skipping overlays", character["id"])
             return {}
-        neutral_image = neutral_path.read_bytes()
 
     # 3 overlays per character, generated in parallel (they share the
     # neutral reference and don't depend on each other).

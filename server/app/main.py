@@ -63,7 +63,7 @@ def _install_middleware(application: FastAPI) -> None:
         SessionMiddleware,
         secret_key=config.SESSION_SECRET,
         same_site="lax",
-        https_only=False,  # dev is http://localhost
+        https_only=config.SESSION_COOKIE_SECURE,  # True behind HTTPS in prod
     )
 
 

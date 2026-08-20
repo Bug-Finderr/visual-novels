@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/>
+      <stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Generation Pipeline</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">POST /api/sessions/&lt;id&gt;/generate · ~5 min total · progress streamed via SSE</text>
+
+  <!-- progress bar at top -->
+  <rect x="80" y="100" width="1040" height="14" rx="7" fill="#1a1a2e"/>
+  <rect x="80" y="100" width="1040" height="14" rx="7" fill="url(#progressGrad)"/>
+  <defs>
+    <linearGradient id="progressGrad" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="0.45" stop-color="#a78bfa"/>
+      <stop offset="0.72" stop-color="#c4b5fd"/>
+      <stop offset="0.92" stop-color="#86efac"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+  <text x="80"   y="92" fill="#9898b0" font-size="11">0%</text>
+  <text x="600"  y="92" text-anchor="middle" fill="#9898b0" font-size="11">progress %</text>
+  <text x="1120" y="92" text-anchor="end" fill="#9898b0" font-size="11">100%</text>
+  <!-- step ticks -->
+  <g fill="#c4b5fd" font-size="10" text-anchor="middle">
+    <text x="124"  y="132">5%</text>
+    <text x="288"  y="132">20%</text>
+    <text x="500"  y="132">45%</text>
+    <text x="780"  y="132">72%</text>
+    <text x="998"  y="132">92%</text>
+    <text x="1080" y="132">100%</text>
+  </g>
+
+  <!-- 6 step cards, top row 3 + bottom row 3 -->
+  <g filter="url(#sh)">
+    <!-- 1. Story -->
+    <rect x="60" y="170" width="360" height="200" rx="12" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="80" y="200" fill="#a78bfa" font-size="13" font-weight="700">1 · STORY</text>
+    <text x="80" y="220" fill="#e8e8f0" font-size="12">Gemini 2.5 Pro</text>
+    <text x="80" y="240" fill="#9898b0" font-size="11">single JSON response, response_mime_type=json</text>
+    <text x="80" y="258" fill="#9898b0" font-size="11">→ worldLore, plotArc, characters[3-5]</text>
+    <text x="80" y="274" fill="#9898b0" font-size="11">→ initialScenes[5], openingScript[20-40]</text>
+    <text x="80" y="290" fill="#9898b0" font-size="11">Each character has voiceCaption (JP)</text>
+    <text x="80" y="306" fill="#9898b0" font-size="11">Each dialogue/narration has jp text</text>
+    <text x="80" y="332" fill="#86efac" font-size="11">Output saved to sessions/characters/scenes</text>
+    <text x="80" y="350" fill="#7c3aed" font-size="11" font-weight="600">~30-60 s</text>
+
+    <!-- 2. Sprites -->
+    <rect x="430" y="170" width="360" height="200" rx="12" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="450" y="200" fill="#a78bfa" font-size="13" font-weight="700">2 · CHARACTER SPRITES</text>
+    <text x="450" y="220" fill="#e8e8f0" font-size="12">Gemini 2.5 Flash Image</text>
+    <text x="450" y="240" fill="#9898b0" font-size="11">1 NEUTRAL sprite per character</text>
+    <text x="450" y="256" fill="#9898b0" font-size="11">3:4 aspect, 864×1184 RGBA</text>
+    <text x="450" y="272" fill="#9898b0" font-size="11">rembg / U²-Net background removal</text>
+    <text x="450" y="288" fill="#9898b0" font-size="11">— PIVOT: was 10 sprites/char (Gemini for</text>
+    <text x="450" y="304" fill="#9898b0" font-size="11">  every emotion); now 1 sprite/char,</text>
+    <text x="450" y="320" fill="#9898b0" font-size="11">  ~10× cheaper, perfectly consistent</text>
+    <text x="450" y="350" fill="#7c3aed" font-size="11" font-weight="600">~30 s × N chars</text>
+
+    <!-- 3. Animations -->
+    <rect x="800" y="170" width="360" height="200" rx="12" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="820" y="200" fill="#a78bfa" font-size="13" font-weight="700">3 · DERIVED EXPRESSIONS &amp; ANIM</text>
+    <text x="820" y="220" fill="#e8e8f0" font-size="12">THA3 puppeteer (face-localized)</text>
+    <text x="820" y="240" fill="#9898b0" font-size="11">For each of 10 emotions × 4 frames:</text>
+    <text x="820" y="256" fill="#9898b0" font-size="11">  • &lt;expr&gt;.png      (emotion base)</text>
+    <text x="820" y="272" fill="#9898b0" font-size="11">  • &lt;expr&gt;_blink.png</text>
+    <text x="820" y="288" fill="#9898b0" font-size="11">  • &lt;expr&gt;_mouth_half.png</text>
+    <text x="820" y="304" fill="#9898b0" font-size="11">  • &lt;expr&gt;_mouth_open.png</text>
+    <text x="820" y="320" fill="#9898b0" font-size="11">= 40 frames per character</text>
+    <text x="820" y="350" fill="#7c3aed" font-size="11" font-weight="600">~10 s × N chars (batched)</text>
+
+    <!-- 4. Backgrounds -->
+    <rect x="60" y="400" width="360" height="200" rx="12" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="80" y="430" fill="#a78bfa" font-size="13" font-weight="700">4 · BACKGROUNDS</text>
+    <text x="80" y="450" fill="#e8e8f0" font-size="12">Gemini 2.5 Flash Image</text>
+    <text x="80" y="470" fill="#9898b0" font-size="11">5 background scenes (16:9)</text>
+    <text x="80" y="486" fill="#9898b0" font-size="11">prompted from initialScenes descriptions</text>
+    <text x="80" y="502" fill="#9898b0" font-size="11">Frontend renders with subtle Ken-Burns</text>
+    <text x="80" y="518" fill="#9898b0" font-size="11">  pan/zoom (CSS keyframes)</text>
+    <text x="80" y="580" fill="#7c3aed" font-size="11" font-weight="600">~10-15 s × 5</text>
+
+    <!-- 5. Script -->
+    <rect x="430" y="400" width="360" height="200" rx="12" fill="#1a1a2e" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="450" y="430" fill="#a78bfa" font-size="13" font-weight="700">5 · SCRIPT BUILD</text>
+    <text x="450" y="450" fill="#e8e8f0" font-size="12">script_builder.py · pure Python</text>
+    <text x="450" y="470" fill="#9898b0" font-size="11">Convert openingScript → label statements</text>
+    <text x="450" y="486" fill="#9898b0" font-size="11">"narration"  → "raw text"</text>
+    <text x="450" y="502" fill="#9898b0" font-size="11">"dialogue"   → "speaker:expr text"</text>
+    <text x="450" y="518" fill="#9898b0" font-size="11">"scene_change" / "show_character" → cmds</text>
+    <text x="450" y="534" fill="#9898b0" font-size="11">choices → {Choice: {labelN: {...}}}</text>
+    <text x="450" y="550" fill="#9898b0" font-size="11">→ saved to script_labels table</text>
+    <text x="450" y="580" fill="#7c3aed" font-size="11" font-weight="600">&lt; 1 s</text>
+
+    <!-- 6. TTS -->
+    <rect x="800" y="400" width="360" height="200" rx="12" fill="#1a1a2e" stroke="#22c55e" stroke-opacity="0.55"/>
+    <text x="820" y="430" fill="#86efac" font-size="13" font-weight="700">6 · VOICES</text>
+    <text x="820" y="450" fill="#e8e8f0" font-size="12">Irodori-TTS-500M-v2-VoiceDesign</text>
+    <text x="820" y="470" fill="#9898b0" font-size="11">For every dialogue/narration with jp:</text>
+    <text x="820" y="486" fill="#9898b0" font-size="11">  POST /synthesize {text, caption}</text>
+    <text x="820" y="502" fill="#9898b0" font-size="11">  caption = speaker.voice_caption (JP)</text>
+    <text x="820" y="518" fill="#9898b0" font-size="11">key = sha1(rendered script string)[:16]</text>
+    <text x="820" y="534" fill="#9898b0" font-size="11">→ saved as &lt;key&gt;.wav + manifest.json</text>
+    <text x="820" y="550" fill="#9898b0" font-size="11">  (script_string → filename mapping)</text>
+    <text x="820" y="580" fill="#7c3aed" font-size="11" font-weight="600">~1 s × 20 lines</text>
+  </g>
+
+  <!-- arrows step→step -->
+  <g stroke="#7c3aed" stroke-width="2" fill="none">
+    <line x1="420" y1="270" x2="430" y2="270" marker-end="url(#arr)"/>
+    <line x1="790" y1="270" x2="800" y2="270" marker-end="url(#arr)"/>
+    <path d="M980 370 V 385 H 240 V 400" marker-end="url(#arr)"/>
+    <line x1="420" y1="500" x2="430" y2="500" marker-end="url(#arr)"/>
+    <line x1="790" y1="500" x2="800" y2="500" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- terminal status -->
+  <g filter="url(#sh)">
+    <rect x="430" y="640" width="340" height="55" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.55"/>
+    <text x="600" y="665" text-anchor="middle" fill="#86efac" font-size="13" font-weight="700">→ session.status = "ready"</text>
+    <text x="600" y="683" text-anchor="middle" fill="#9898b0" font-size="11">SSE emits {step:"done", progress:100} ; client navigates to /game/&lt;sid&gt;</text>
+  </g>
+</svg>

@@ -84,6 +84,18 @@ class Config(BaseSettings):
     # validator below can split it on commas.
     ALLOWED_ORIGINS: Annotated[tuple[str, ...], NoDecode] = ("http://localhost:3000",)
 
+    # --- Asset storage: local disk (dev) or a public GCS bucket (prod) ---
+    ASSET_BACKEND: str = "local"          # 'local' | 'gcs'
+    GCS_BUCKET: str | None = None         # bucket name when ASSET_BACKEND=gcs
+    # Public/CDN base for reading assets from the browser. Defaults to the
+    # bucket's public endpoint; set to a Cloud CDN / custom domain in prod.
+    GCS_PUBLIC_BASE: str | None = None
+    # Session-cookie flags. Flip Secure on behind HTTPS; SameSite must be
+    # 'none' (with Secure) only if the SPA is served from a different site
+    # than the API — a same-origin proxy keeps it 'lax'.
+    SESSION_COOKIE_SECURE: bool = False
+    SESSION_COOKIE_SAMESITE: str = "lax"  # 'lax' | 'strict' | 'none'
+
     models: Models = Models()
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
@@ -93,7 +105,20 @@ class Config(BaseSettings):
             return tuple(o.strip() for o in v.split(",") if o.strip())
         return tuple(v)
 
-    @field_validator("STORYGEN_ENGINE", mode="after")
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def _force_psycopg_driver(cls, v: str) -> str:
+        # Managed Postgres providers (Render, Heroku, Supabase, Neon, ...) hand
+        # out a plain postgres:// / postgresql:// URL; SQLAlchemy needs the
+        # +psycopg driver suffix. Rewrite rather than requiring every deploy
+        # target to hand-edit the connection string.
+        if v.startswith("postgres://"):
+            return "postgresql+psycopg://" + v[len("postgres://"):]
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
+
+    @field_validator("STORYGEN_ENGINE", "ASSET_BACKEND", "SESSION_COOKIE_SAMESITE", mode="after")
     @classmethod
     def _normalize_engine(cls, v: str) -> str:
         return v.strip().lower()

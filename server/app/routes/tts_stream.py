@@ -20,15 +20,15 @@ the line starts speaking before the synthesis is complete.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import wave
-from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.db.queries import characters as character_queries
 from app.logger import logger
-from app.services import silk_client, tts_generator
+from app.services import silk_client, storage, tts_generator
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["tts-stream"])
 
@@ -45,9 +45,9 @@ def _resolve_profile(session_id: str, character_id: str | None) -> dict:
     )
 
 
-async def _stream_cached_pcm(ws: WebSocket, wav_path: Path) -> None:
+async def _stream_cached_pcm(ws: WebSocket, wav_bytes: bytes) -> None:
     """Stream a cached WAV's PCM payload as 100 ms chunks."""
-    with wave.open(str(wav_path), "rb") as wf:
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
         sr = wf.getframerate()
         chunk_frames = max(sr // 10, 1)
         while True:
@@ -83,11 +83,12 @@ async def tts_stream(ws: WebSocket, session_id: str):
 
     profile = _resolve_profile(session_id, character_id)
     key = tts_generator._audio_key_for(script_string) if script_string else tts_generator._audio_key_for(text)
-    out_path = tts_generator.audio_path(session_id, key)
+    akey = tts_generator.audio_key(session_id, key)
 
     try:
-        if out_path.exists():
-            await _stream_cached_pcm(ws, out_path)
+        cached = storage.backend.read(akey)
+        if cached:
+            await _stream_cached_pcm(ws, cached)
             await ws.send_json({"type": "done", "cached": True})
             await ws.close()
             return
@@ -136,14 +137,13 @@ async def tts_stream(ws: WebSocket, session_id: str):
             return
 
         # Tell the browser we're done BEFORE writing the cache — playback
-        # can start tearing down its WS immediately, and the disk write
+        # can start tearing down its WS immediately, and the cache write
         # happens off the hot path.
         await ws.send_json({"type": "done", "cached": False})
         await ws.close()
 
         wav = silk_client._wrap_pcm_as_wav(chunks)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(wav)
+        storage.backend.save(akey, wav, content_type="audio/wav")
         if script_string:
             manifest = tts_generator._load_manifest(session_id)
             manifest[script_string] = f"{key}.wav"

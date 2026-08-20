@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/>
+    </marker>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/><stop offset="1" stop-color="#14141f"/>
+    </linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity="0.5"/></filter>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <text x="600" y="44" text-anchor="middle" fill="#e8e8f0" font-size="22" font-weight="700">Runtime Gameplay Loop</text>
+  <text x="600" y="68" text-anchor="middle" fill="#9898b0" font-size="13">Player choice / free-input → Gemini Flash → script_builder → TTS → frontend renders</text>
+
+  <!-- Player -->
+  <g filter="url(#sh)">
+    <rect x="40" y="110" width="200" height="70" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="140" y="140" text-anchor="middle" fill="#e8e8f0" font-size="13" font-weight="600">Player</text>
+    <text x="140" y="160" text-anchor="middle" fill="#9898b0" font-size="11">clicks a choice OR types free input</text>
+  </g>
+
+  <!-- Frontend -->
+  <g filter="url(#sh)">
+    <rect x="40" y="220" width="200" height="100" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="140" y="248" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">Frontend</text>
+    <text x="60" y="270" fill="#9898b0" font-size="11">audioCue.select()</text>
+    <text x="60" y="286" fill="#9898b0" font-size="11">show loading overlay</text>
+    <text x="60" y="302" fill="#9898b0" font-size="11">POST /sessions/&lt;id&gt;/choice</text>
+  </g>
+
+  <line x1="240" y1="265" x2="320" y2="265" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="280" y="255" text-anchor="middle" fill="#c4b5fd" font-size="10">JSON</text>
+
+  <!-- Backend -->
+  <g filter="url(#sh)">
+    <rect x="320" y="200" width="540" height="280" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="590" y="225" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">Backend · /choice handler</text>
+
+    <!-- step 1 -->
+    <rect x="340" y="240" width="500" height="44" rx="6" fill="#0a1a25" stroke="#06b6d4" stroke-opacity="0.6"/>
+    <text x="350" y="262" fill="#67e8f9" font-size="12" font-weight="600">1. dialogue_engine.process_player_action()</text>
+    <text x="350" y="278" fill="#9898b0" font-size="11">Gemini 2.5 Flash · system prompt + 40-line history + user msg → JSON</text>
+
+    <!-- step 2 -->
+    <rect x="340" y="294" width="500" height="44" rx="6" fill="#1a132a" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="350" y="316" fill="#a78bfa" font-size="12" font-weight="600">2. handle newCharacterIntroduced / sceneChangeNeeded</text>
+    <text x="350" y="332" fill="#9898b0" font-size="11">if new char: gemini neutral sprite + THA3 derive (background task)</text>
+
+    <!-- step 3 -->
+    <rect x="340" y="348" width="500" height="44" rx="6" fill="#1a132a" stroke="#7c3aed" stroke-opacity="0.55"/>
+    <text x="350" y="370" fill="#a78bfa" font-size="12" font-weight="600">3. script_builder.build_runtime_label(ai_output)</text>
+    <text x="350" y="386" fill="#9898b0" font-size="11">format statements as strings, build Choice block, save labels</text>
+
+    <!-- step 4 -->
+    <rect x="340" y="402" width="500" height="44" rx="6" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.6"/>
+    <text x="350" y="424" fill="#86efac" font-size="12" font-weight="600">4. tts_generator.generate_for_statements()</text>
+    <text x="350" y="440" fill="#9898b0" font-size="11">Irodori synthesizes WAVs for new dialogue lines (~1 s × N)</text>
+
+    <!-- step 5 -->
+    <text x="340" y="468" fill="#c4b5fd" font-size="11">→ return {newLabel, statements, extraLabels, choices, audioManifest}</text>
+  </g>
+
+  <line x1="320" y1="450" x2="240" y2="450" stroke="#a78bfa" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="280" y="440" text-anchor="middle" fill="#c4b5fd" font-size="10">JSON</text>
+
+  <!-- Frontend response -->
+  <g filter="url(#sh)">
+    <rect x="40" y="400" width="200" height="280" rx="10" fill="#1a1a2e" stroke="#7c3aed"/>
+    <text x="140" y="428" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="700">Frontend · _injectAndPlay</text>
+    <text x="60" y="452" fill="#9898b0" font-size="11">merge result.audioManifest</text>
+    <text x="60" y="468" fill="#9898b0" font-size="11">  into _voiceManifest</text>
+    <text x="60" y="486" fill="#9898b0" font-size="11">script[newLabel] = statements</text>
+    <text x="60" y="502" fill="#9898b0" font-size="11">currentLabel = newLabel</text>
+    <text x="60" y="518" fill="#9898b0" font-size="11">executeNext()</text>
+    <text x="60" y="546" fill="#c4b5fd" font-size="11">For each statement:</text>
+    <text x="60" y="562" fill="#9898b0" font-size="11">  show scene → fade BG</text>
+    <text x="60" y="578" fill="#9898b0" font-size="11">  show character → mount</text>
+    <text x="60" y="594" fill="#9898b0" font-size="11">  dialogue → typewriter</text>
+    <text x="60" y="610" fill="#9898b0" font-size="11">    + audio.play()</text>
+    <text x="60" y="626" fill="#9898b0" font-size="11">    + mouth-flap on</text>
+    <text x="60" y="644" fill="#9898b0" font-size="11">    + speaker focus</text>
+    <text x="60" y="662" fill="#9898b0" font-size="11">  Choice → render buttons</text>
+  </g>
+
+  <!-- Right side: AI response shape -->
+  <g filter="url(#sh)">
+    <rect x="900" y="200" width="260" height="280" rx="10" fill="#0a0a0f" stroke="#7c3aed" stroke-opacity="0.4"/>
+    <text x="920" y="225" fill="#c4b5fd" font-size="12" font-weight="700">ai_output (JSON)</text>
+    <text x="920" y="248" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">{</text>
+    <text x="930" y="262" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">statements: [</text>
+    <text x="940" y="276" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">{type:"narration",</text>
+    <text x="950" y="290" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">text, jp},</text>
+    <text x="940" y="304" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">{type:"dialogue",</text>
+    <text x="950" y="318" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">speaker, expression,</text>
+    <text x="950" y="332" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">text, jp},</text>
+    <text x="940" y="346" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">{type:"show_character"},</text>
+    <text x="940" y="360" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">…</text>
+    <text x="930" y="374" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">],</text>
+    <text x="930" y="388" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">choices: [...],</text>
+    <text x="930" y="402" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">allowFreeInput: true,</text>
+    <text x="930" y="416" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">newCharacterIntroduced,</text>
+    <text x="930" y="430" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">sceneChangeNeeded</text>
+    <text x="920" y="444" fill="#9898b0" font-size="11" font-family="ui-monospace, monospace">}</text>
+  </g>
+
+  <!-- AI brain -->
+  <g filter="url(#sh)">
+    <rect x="900" y="510" width="260" height="170" rx="10" fill="#0f1f0f" stroke="#22c55e" stroke-opacity="0.6"/>
+    <text x="1030" y="538" text-anchor="middle" fill="#86efac" font-size="12" font-weight="700">Gemini 2.5 Flash</text>
+    <text x="920" y="560" fill="#9898b0" font-size="11">- system prompt = world,</text>
+    <text x="920" y="574" fill="#9898b0" font-size="11">  characters, plot, scene,</text>
+    <text x="920" y="588" fill="#9898b0" font-size="11">  tone, output schema</text>
+    <text x="920" y="608" fill="#9898b0" font-size="11">- contents = recent 40 msgs</text>
+    <text x="920" y="622" fill="#9898b0" font-size="11">  + new player message</text>
+    <text x="920" y="642" fill="#9898b0" font-size="11">- response_mime_type=json</text>
+    <text x="920" y="656" fill="#9898b0" font-size="11">- temperature 0.8</text>
+    <text x="920" y="670" fill="#9898b0" font-size="11">- maxTokens 3000</text>
+  </g>
+</svg>

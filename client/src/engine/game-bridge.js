@@ -1,6 +1,20 @@
 import { api } from '../lib/api.js';
+import { assetUrl } from '../lib/assets.js';
 import { AnimatedSprite } from './animated-sprite.js';
 import { audioCue } from './audio-cue.js';
+
+// TTS WebSocket base. Dev: same host (Vite proxy). Prod: derive the wss host
+// from VITE_API_BASE (Cloud Run) since Netlify can't proxy WebSockets.
+function ttsWsUrl(sessionId) {
+  const apiBase = import.meta.env.VITE_API_BASE;
+  if (apiBase) {
+    const u = new URL(apiBase);
+    const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${u.host}/api/v1/sessions/${sessionId}/tts/stream`;
+  }
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}/api/v1/sessions/${sessionId}/tts/stream`;
+}
 
 const TTS_SAMPLE_RATE = 24000;
 
@@ -45,8 +59,7 @@ class StreamingVoicePlayer {
 
   play({ scriptString, text, characterId, expression }) {
     this.stop();
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${location.host}/api/v1/sessions/${this.sessionId}/tts/stream`;
+    const url = ttsWsUrl(this.sessionId);
     let ws;
     try {
       ws = new WebSocket(url);
@@ -448,7 +461,7 @@ class GameBridge {
     const sceneId = parts[2];
     if (sceneId === this._currentSceneId) return;
     this._currentSceneId = sceneId;
-    const url = `/game-assets/${this.sessionId}/backgrounds/${sceneId}.png`;
+    const url = assetUrl(`${this.sessionId}/backgrounds/${sceneId}.png`);
     // Crossfade by toggling a class — CSS handles the transition
     this.bgEl.style.backgroundImage = `url('${url}')`;
     this.bgEl.classList.remove('ken-burns'); // reset animation so it restarts
