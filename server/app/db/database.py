@@ -26,6 +26,13 @@ class _Result:
     def __init__(self, result):
         self._result = result
 
+    @property
+    def rowcount(self) -> int:
+        """Rows affected by an UPDATE/DELETE. This is what makes a conditional
+        write ('UPDATE ... WHERE balance >= ?') usable as a lock-free
+        compare-and-swap: rowcount 0 means someone else won the race."""
+        return self._result.rowcount
+
     def fetchone(self) -> dict | None:
         if not self._result.returns_rows:
             return None
