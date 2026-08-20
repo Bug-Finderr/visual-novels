@@ -23,7 +23,12 @@ _progress: dict[str, dict] = {}
 
 # Gemini Image API concurrency — keep aligned with image_generator's
 # internal cap. Going above 6 trips rate limits intermittently.
-_PIPELINE_WORKERS = 6
+# Lowered from 6: each concurrent task holds a full-res generated image plus
+# (for sprites) an onnxruntime inference pass in memory at once, and 6-wide
+# on a 2GB instance was enough to OOM mid-generation. Trades some wall-clock
+# speed for staying inside a Standard-plan instance; raise this back toward
+# 6 if the instance is bumped to a larger plan.
+_PIPELINE_WORKERS = 3
 
 
 def _set_progress(session_id: str, **payload) -> None:
