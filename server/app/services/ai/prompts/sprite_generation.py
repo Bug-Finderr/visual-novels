@@ -31,6 +31,13 @@ def build_sprite_prompt(character: dict, expression: str, art_style: str, has_re
     expr_desc = EXPRESSION_DESCRIPTIONS.get(expression, EXPRESSION_DESCRIPTIONS["neutral"])
     reference_note = " matching the reference image provided" if has_reference else ""
 
+    # Asking for a flat chroma-key color rather than a transparent/alpha
+    # background: image models follow "solid color" far more reliably than
+    # "transparent," and background_remover.remove_sprite_bg() keys this
+    # color out afterward with a plain color-distance threshold.
+    from app.services.background_remover import CHROMA_KEY_COLOR
+    key_hex = "#%02X%02X%02X" % CHROMA_KEY_COLOR
+
     prompt = f"""Generate a visual novel character sprite.
 
 STYLE: {style}
@@ -40,13 +47,14 @@ EXPRESSION: {expr_desc}
 
 REQUIREMENTS:
 - FULL-BODY portrait, head to feet, facing slightly toward camera (NOT a closeup, NOT cropped at the chest or waist)
-- TRANSPARENT background (alpha channel) — no solid colour, no scenery
+- SOLID FLAT background of pure magenta color ({key_hex}), completely uniform across the entire background — no gradient, no shadow, no texture, no scenery. This is a chroma-key background that will be removed programmatically, so it must be a single flat color with nothing else in it.
 - Consistent character design{reference_note}
 - Character centered horizontally in frame; head near the top edge, feet near the bottom edge
 - 3:4 portrait aspect
 - High quality, clean art suitable for a visual novel game
 - Expression must be clearly readable — make eyes/brows/mouth bold enough to read at full-body scale
-- Clothing, hair, accessories, and body proportions IDENTICAL across all expressions"""
+- Clothing, hair, accessories, and body proportions IDENTICAL across all expressions
+- IMPORTANT: none of the character's clothing, hair, or accessories should be this magenta color, to keep the chroma-key clean"""
 
     if has_reference:
         prompt += f"""
@@ -56,7 +64,7 @@ CRITICAL CONSISTENCY RULES (the reference image is the ground truth):
 2. SAME identity — same face shape, hair color and style, eye color, skin tone, clothing, accessories.
 3. SAME body proportions and standing pose silhouette.
 4. ONLY the facial expression and minor body language change to show: {expr_desc}.
-5. Keep the background transparent like the reference."""
+5. Keep the same flat {key_hex} chroma-key background as the reference."""
 
     return prompt
 

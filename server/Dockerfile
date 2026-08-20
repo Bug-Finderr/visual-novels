@@ -1,7 +1,5 @@
-# Backend image for Cloud Run.  Build context = ./server
+# Backend image for Cloud Run / Render.  Build context = ./server
 #   docker build -t storyplex-api ./server
-# Python 3.12 (onnxruntime, pulled in by rembg for sprite background removal,
-# has no 3.13 wheels yet).
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -9,23 +7,11 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8080
 
-# Native libs for Pillow / onnxruntime image processing.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libgl1 libglib2.0-0 libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 # Install deps first so the layer caches across code changes.
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-
-# Bake the u2net background-removal model into the image so it's already
-# warm in the container filesystem — the alternative is a ~176MB download
-# racing across 4 parallel sprite-generation workers on every cold start
-# (the platform's disk is ephemeral, so "cached from last time" isn't a
-# thing across redeploys without this).
-RUN python -c "from rembg import new_session; new_session('u2net')"
 
 COPY . .
 

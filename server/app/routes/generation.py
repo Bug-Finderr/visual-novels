@@ -23,6 +23,12 @@ _progress: dict[str, dict] = {}
 
 # Gemini Image API concurrency — keep aligned with image_generator's
 # internal cap. Going above 6 trips rate limits intermittently.
+# (Was briefly dropped to 3 while sprite background-removal ran through
+# rembg/onnxruntime, which added ~700MB-1GB of resident memory per instance
+# and was the actual cause of production OOMs — not concurrency itself.
+# Now that background_remover.py is a plain numpy/PIL color-key with no ML
+# model, profiled: 13 sprite tasks at 6-way concurrency peak at ~500MB
+# total, so back to the original value.)
 _PIPELINE_WORKERS = 6
 
 

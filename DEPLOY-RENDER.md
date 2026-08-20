@@ -48,7 +48,7 @@ The repo root has a `render.yaml` that provisions the Postgres DB, the backend w
 
    (Render service names are globally unique — if either name was already taken by someone else, Render appends a suffix. If that happens, the blueprint's cross-referencing env vars — `GOOGLE_REDIRECT_URI`, `ALLOWED_ORIGINS` on the API; `VITE_API_BASE`, `VITE_ASSET_BASE` on the web service — won't match reality. Fix those three by hand in each service's Environment tab, which triggers a redeploy.)
 
-**Why Standard plan for the backend, not free/Starter:** it loads `onnxruntime` + `rembg` for sprite background-removal, which alone eats a few hundred MB at import time. Render's free tier (sleeps after 15 min idle) and Starter tier (512MB RAM) both risk breaking mid-generation or mid-demo. Standard (2GB) matches what `DEPLOY.md` already provisions on Cloud Run for the same reason — $25/mo, cancel/downgrade after the demo if you don't need it running. The static site costs nothing regardless of which backend plan you pick.
+**Why Standard plan for the backend, not free/Starter:** Render's free tier sleeps after 15 min idle, which would kill an in-progress generation (it's a detached background task tied to that one instance). Standard (2GB) gives real headroom beyond the app's ~115MB import baseline — sprite background removal is a plain numpy/PIL color-key with no ML model, so it's cheap even under full concurrency (profiled: a complete story's image load peaks around 570MB). $25/mo, cancel/downgrade after the demo if you don't need it running. The static site costs nothing regardless of which backend plan you pick.
 
 **No Blueprint access, or you'd rather click through manually?** See "Manual dashboard steps" at the bottom.
 
