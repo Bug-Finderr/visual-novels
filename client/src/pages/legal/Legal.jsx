@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-export const CONTACT_EMAIL = 'support@storyplex.app';
+export const CONTACT_EMAIL = 'suryansh.shakya@hawkslab.org';
 export const LAST_UPDATED = '20 August 2026';
 
 /** Shared chrome for the policy pages. These exist because Cashfree requires
