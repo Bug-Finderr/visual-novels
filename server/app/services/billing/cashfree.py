@@ -30,6 +30,13 @@ _BASE = {
 PAID = "PAID"
 FAILED_STATES = {"EXPIRED", "TERMINATED"}
 
+# Per-ATTEMPT statuses from /orders/{id}/payments. Note an order stays ACTIVE
+# after a failed attempt — the customer may retry the same order — so order
+# status alone can never tell you a payment failed. These can.
+ATTEMPT_FAILED = {"FAILED", "CANCELLED", "VOID"}
+ATTEMPT_DROPPED = {"USER_DROPPED"}
+ATTEMPT_PENDING = {"PENDING"}
+
 
 class CashfreeError(RuntimeError):
     """A Cashfree call failed. Carries the upstream status + body for logs."""
@@ -122,6 +129,32 @@ def get_order(order_id: str) -> dict:
     """Authoritative server-side order state. Never trust the browser's word
     that a payment succeeded — always confirm through this."""
     return _request("GET", f"/orders/{order_id}")
+
+
+def get_order_payments(order_id: str) -> list[dict]:
+    """Every payment ATTEMPT on an order, newest last.
+
+    Needed because a declined or abandoned attempt leaves the order itself
+    ACTIVE (so the customer can try again) — order status alone can't
+    distinguish "still waiting" from "the card was declined", and telling
+    someone their failed payment is 'still being confirmed' is worse than
+    telling them nothing.
+    """
+    result = _request("GET", f"/orders/{order_id}/payments")
+    return result if isinstance(result, list) else []
+
+
+def latest_attempt(payments: list[dict]) -> dict | None:
+    """The most recent attempt, preferring a SUCCESS if one exists."""
+    if not payments:
+        return None
+    for p in payments:
+        if (p.get("payment_status") or "").upper() == "SUCCESS":
+            return p
+    return sorted(
+        payments,
+        key=lambda p: p.get("payment_completion_time") or p.get("payment_time") or "",
+    )[-1]
 
 
 def verify_webhook(raw_body: bytes, timestamp: str, signature: str) -> bool:
