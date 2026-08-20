@@ -33,7 +33,11 @@ export const api = {
    * @param {function} onError - called on error
    */
   sse(path, onMessage, onError) {
-    const source = new EventSource(`${BASE}${path}`);
+    // withCredentials: unlike fetch(), EventSource does NOT send cookies
+    // cross-origin by default — without this, the backend can't see the
+    // session cookie and rejects (require_readable), which just looks like
+    // a connection that never progresses past 0%.
+    const source = new EventSource(`${BASE}${path}`, { withCredentials: true });
     source.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
