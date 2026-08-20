@@ -20,6 +20,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+# Bake the u2net background-removal model into the image so it's already
+# warm in the container filesystem — the alternative is a ~176MB download
+# racing across 4 parallel sprite-generation workers on every cold start
+# (the platform's disk is ephemeral, so "cached from last time" isn't a
+# thing across redeploys without this).
+RUN python -c "from rembg import new_session; new_session('u2net')"
+
 COPY . .
 
 # Cloud Run / Render both inject $PORT (default 8080). uvicorn (not gunicorn)
