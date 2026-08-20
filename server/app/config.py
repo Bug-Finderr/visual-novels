@@ -105,6 +105,19 @@ class Config(BaseSettings):
             return tuple(o.strip() for o in v.split(",") if o.strip())
         return tuple(v)
 
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def _force_psycopg_driver(cls, v: str) -> str:
+        # Managed Postgres providers (Render, Heroku, Supabase, Neon, ...) hand
+        # out a plain postgres:// / postgresql:// URL; SQLAlchemy needs the
+        # +psycopg driver suffix. Rewrite rather than requiring every deploy
+        # target to hand-edit the connection string.
+        if v.startswith("postgres://"):
+            return "postgresql+psycopg://" + v[len("postgres://"):]
+        if v.startswith("postgresql://"):
+            return "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
+
     @field_validator("STORYGEN_ENGINE", "ASSET_BACKEND", "SESSION_COOKIE_SAMESITE", mode="after")
     @classmethod
     def _normalize_engine(cls, v: str) -> str:
