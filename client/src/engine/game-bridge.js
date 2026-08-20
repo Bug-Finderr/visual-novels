@@ -18,15 +18,28 @@ function ttsWsUrl(sessionId) {
 
 const TTS_SAMPLE_RATE = 24000;
 
+// How many decoded lines to keep. A 24 kHz mono line is ~96 KB/second as
+// Float32, so ~24 lines of typical length sits around 10-15 MB.
+const VOICE_CACHE_MAX = 24;
+// How far ahead to warm the cache while the current line plays.
+const VOICE_PREFETCH = 3;
+
 /**
- * Streams raw int16 LE PCM @ 24 kHz mono from /api/v1/sessions/{sid}/tts/stream
- * (which proxies Mulberry's WS) and plays it through an AudioContext while
- * the bytes are still arriving. Cached lines replay via the same endpoint —
- * the server reads the on-disk WAV and re-streams its PCM. An AnalyserNode
- * sits in the chain so the existing amplitude-based lip-sync works
- * unchanged.
+ * Plays a line's voice, preferring the audio the generation pipeline already
+ * rendered.
+ *
+ * Nearly every line HAS a pre-rendered WAV sitting in the public asset bucket
+ * (see tts_generator's PHASE E), so the fast path just fetches that from the
+ * CDN and decodes it — and upcoming lines are prefetched while the current one
+ * plays, which usually makes playback start on the same frame as the text.
+ *
+ * The WebSocket streamer is kept ONLY as a fallback for lines with no
+ * pre-rendered audio (live free-input, cache misses). It used to handle every
+ * line, which meant each one paid a fresh TCP + TLS + WS handshake before its
+ * first audio byte — routinely long enough that the typewriter finished first.
+ * An AnalyserNode sits in the chain for both paths, so lip-sync is unchanged.
  */
-class StreamingVoicePlayer {
+class VoicePlayer {
   constructor(audioCtx, sessionId) {
     this.ctx = audioCtx;
     this.sessionId = sessionId;
@@ -40,12 +53,30 @@ class StreamingVoicePlayer {
     this._sources = [];
     this._nextStart = 0;
     this._onDone = null;
+
+    this._manifest = {};        // scriptString -> filename
+    this._buffers = new Map();  // scriptString -> AudioBuffer (insertion-ordered)
+    this._inflight = new Map(); // scriptString -> Promise
+    // Guards against a slow fetch resolving after the player has moved on:
+    // without it, advancing quickly could play the previous line's audio over
+    // the current one.
+    this._gen = 0;
   }
 
   setOnDone(cb) { this._onDone = cb; }
 
+  /** Merge in {scriptString: filename} entries as new beats arrive. */
+  mergeManifest(entries) {
+    if (entries && typeof entries === 'object') Object.assign(this._manifest, entries);
+  }
+
+  hasCached(scriptString) {
+    return Boolean(this._manifest[scriptString]);
+  }
+
   /** Tear down the live stream + cancel any queued audio buffers. */
   stop() {
+    this._gen++;
     if (this._ws) {
       try { this._ws.close(); } catch {}
       this._ws = null;
@@ -57,8 +88,75 @@ class StreamingVoicePlayer {
     this._nextStart = this.ctx.currentTime;
   }
 
-  play({ scriptString, text, characterId, expression }) {
+  /** Warm the decode cache for lines about to be displayed. */
+  prefetch(scriptStrings) {
+    for (const s of scriptStrings) {
+      if (s && this._manifest[s] && !this._buffers.has(s)) this._load(s);
+    }
+  }
+
+  _load(scriptString) {
+    const cached = this._buffers.get(scriptString);
+    if (cached) return Promise.resolve(cached);
+    const pending = this._inflight.get(scriptString);
+    if (pending) return pending;
+
+    const file = this._manifest[scriptString];
+    if (!file) return Promise.resolve(null);
+
+    const task = (async () => {
+      try {
+        const res = await fetch(assetUrl(`${this.sessionId}/audio/${file}`));
+        if (!res.ok) return null;
+        const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+        this._buffers.set(scriptString, buf);
+        // Map preserves insertion order, so the first key is the oldest.
+        while (this._buffers.size > VOICE_CACHE_MAX) {
+          this._buffers.delete(this._buffers.keys().next().value);
+        }
+        return buf;
+      } catch {
+        return null;   // fall back to streaming
+      } finally {
+        this._inflight.delete(scriptString);
+      }
+    })();
+    this._inflight.set(scriptString, task);
+    return task;
+  }
+
+  async play({ scriptString, text, characterId, expression }) {
     this.stop();
+    const gen = this._gen;
+
+    // Already decoded: starts this frame, in step with the first character.
+    const ready = this._buffers.get(scriptString);
+    if (ready) { this._playBuffer(ready, gen); return; }
+
+    if (this._manifest[scriptString]) {
+      const buf = await this._load(scriptString);
+      if (gen !== this._gen) return;   // advanced past this line already
+      if (buf) { this._playBuffer(buf, gen); return; }
+    }
+
+    if (gen !== this._gen) return;
+    this._playStream({ scriptString, text, characterId, expression });
+  }
+
+  _playBuffer(buffer, gen) {
+    if (gen !== this._gen) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this._gain);
+    src.start();
+    this._sources.push(src);
+    src.onended = () => {
+      this._sources = this._sources.filter((s) => s !== src);
+      if (gen === this._gen && this._onDone) this._onDone();
+    };
+  }
+
+  _playStream({ scriptString, text, characterId, expression }) {
     const url = ttsWsUrl(this.sessionId);
     let ws;
     try {
@@ -182,12 +280,20 @@ class GameBridge {
     this.scenes = {};
     for (const s of scenes) this.scenes[s.id] = s;
 
-    // Streaming voice player — opens a WS to /api/.../tts/stream per line.
+    // Voice player — plays the pipeline's pre-rendered audio from the CDN,
+    // falling back to the per-line TTS WebSocket only when a line has none.
     // The AudioContext is created in the start-gate click handler (user
     // gesture) so playback is allowed by autoplay policy.
     this._audioCtx = null;
     this._audioPrimed = false;
+    // Fetch the manifest now, while the player is still on the start gate —
+    // by the time they click through, the first lines can play immediately.
+    this._loadVoiceManifest();
     this._streamer = null;
+    // {scriptString: filename} for lines the pipeline pre-rendered. Held here
+    // as well as on the player because the manifest loads before the first
+    // user gesture creates the AudioContext.
+    this._voiceManifest = {};
     this._lipRaf = null;
     this._timeData = null;
 
@@ -276,7 +382,8 @@ class GameBridge {
     if (this._streamer) return true;
     if (!this._audioCtx) return false;
     try {
-      this._streamer = new StreamingVoicePlayer(this._audioCtx, this.sessionId);
+      this._streamer = new VoicePlayer(this._audioCtx, this.sessionId);
+      this._streamer.mergeManifest(this._voiceManifest);
       this._streamer.setOnDone(() => this._stopLipSync());
       this._timeData = new Uint8Array(this._streamer.analyser.fftSize);
       return true;
@@ -338,6 +445,39 @@ class GameBridge {
     if (this._streamer) this._streamer.stop();
   }
 
+  /** Pull the session's pre-rendered audio index. Absent or unreachable just
+   *  means every line falls back to the streaming path — the same behaviour as
+   *  before this existed, only slower. */
+  async _loadVoiceManifest() {
+    try {
+      const res = await fetch(assetUrl(`${this.sessionId}/audio/manifest.json`));
+      if (!res.ok) return;
+      this._mergeVoiceManifest(await res.json());
+    } catch { /* streaming fallback covers it */ }
+  }
+
+  /** Merge manifest entries and warm the next few lines' audio. */
+  _mergeVoiceManifest(entries) {
+    if (!entries || typeof entries !== 'object') return;
+    Object.assign(this._voiceManifest, entries);
+    if (this._streamer) this._streamer.mergeManifest(entries);
+  }
+
+  /** Decode the next few lines while the current one plays, so their audio can
+   *  start on the same frame as their first character rather than after a
+   *  fetch. */
+  _prefetchUpcomingVoices() {
+    if (!this._streamer) return;
+    const label = this.script[this.currentLabel];
+    if (!Array.isArray(label)) return;
+    const upcoming = [];
+    for (let i = this.statementIndex; i < label.length && upcoming.length < VOICE_PREFETCH; i++) {
+      const s = label[i];
+      if (typeof s === 'string') upcoming.push(s);
+    }
+    this._streamer.prefetch(upcoming);
+  }
+
   _playVoiceFor(scriptString) {
     this._stopVoice();
     if (!this._ensureStreamer()) return;
@@ -352,6 +492,8 @@ class GameBridge {
 
     this._streamer.play({ scriptString, text, characterId, expression });
     this._startLipSync();
+    // Warm what's next while this line is speaking.
+    this._prefetchUpcomingVoices();
   }
 
   executeNext() {
@@ -704,8 +846,10 @@ class GameBridge {
     this.script[result.newLabel] = result.statements;
     if (result.extraLabels) Object.assign(this.script, result.extraLabels);
 
-    // No client-side voice manifest anymore — the server resolves each line's
-    // audio (cached or live-streamed) on demand via the tts/stream WS.
+    // Newly-expanded beats bring their own pre-rendered audio; merging it here
+    // is what lets the next lines play from the CDN instead of falling back to
+    // a per-line WebSocket.
+    this._mergeVoiceManifest(result.audioManifest);
 
     this.currentLabel = result.newLabel;
     this.statementIndex = 0;
