@@ -151,6 +151,141 @@ def mark_failed(order_id: str, status: str, raw_payload: str | None) -> None:
         )
 
 
+def record_failure(order_id: str, event_type: str, payload: dict) -> None:
+    """Store WHY a payment didn't land, from PAYMENT_FAILED_WEBHOOK or
+    PAYMENT_USER_DROPPED_WEBHOOK.
+
+    'abandoned' (customer walked away at the OTP / UPI-PIN step) is recorded
+    separately from 'failed' (the bank said no) because they mean different
+    things: the first is usually a checkout-friction problem you can fix, the
+    second usually isn't.
+
+    Never touches an order that already paid — a customer may fail once and
+    succeed on retry, and the successful attempt is the one that counts.
+    """
+    payment = (payload.get("data") or {}).get("payment") or {}
+    err = payment.get("error_details") or {}
+    status = "abandoned" if event_type == "PAYMENT_USER_DROPPED_WEBHOOK" else "failed"
+
+    with db() as conn:
+        conn.execute(
+            "UPDATE payment_orders SET status = ?, failure_code = ?, failure_reason = ?,"
+            " failure_description = ?, last_event_type = ?,"
+            " cf_payment_id = COALESCE(?, cf_payment_id),"
+            " updated_at = CURRENT_TIMESTAMP"
+            " WHERE order_id = ? AND credited_at IS NULL",
+            (
+                status,
+                err.get("error_code"),
+                err.get("error_reason"),
+                err.get("error_description") or payment.get("payment_message"),
+                event_type,
+                str(payment.get("cf_payment_id") or "") or None,
+                order_id,
+            ),
+        )
+    logger.info("billing: order %s -> %s (%s)", order_id, status,
+                err.get("error_reason") or err.get("error_code") or "no reason given")
+
+
+def apply_refund(payload: dict, raw: str) -> dict:
+    """Record a refund and take its credits back.
+
+    Refunds are issued from the Cashfree dashboard, so this webhook is the ONLY
+    way the app learns money went back. Without it the customer keeps both the
+    refund and the credits.
+
+    Credits are reclaimed in proportion to the amount refunded, so a partial
+    refund takes back a proportional share. The clawback is allowed to push the
+    balance negative: if they already spent the credits, that debt is the true
+    state and blocks further generation until they top up again.
+    """
+    refund = (payload.get("data") or {}).get("refund") or {}
+    cf_refund_id = str(refund.get("cf_refund_id") or "")
+    order_id = refund.get("order_id") or ""
+    if not cf_refund_id or not order_id:
+        raise BillingError("Refund webhook missing cf_refund_id/order_id")
+
+    status = (refund.get("refund_status") or "").upper()
+    amount_paise = round(float(refund.get("refund_amount") or 0) * 100)
+
+    with db() as conn:
+        order = conn.execute(
+            "SELECT * FROM payment_orders WHERE order_id = ? FOR UPDATE", (order_id,)
+        ).fetchone()
+        if not order:
+            raise BillingError(f"Refund for unknown order '{order_id}'")
+
+        existing = conn.execute(
+            "SELECT credits_reclaimed FROM refunds WHERE cf_refund_id = ?", (cf_refund_id,)
+        ).fetchone()
+
+        if not existing:
+            conn.execute(
+                "INSERT INTO refunds (cf_refund_id, order_id, user_id, refund_id,"
+                " amount_paise, status, refund_type, status_description, processed_at,"
+                " raw_payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (cf_refund_id, order_id, order["user_id"], refund.get("refund_id"),
+                 amount_paise, status, refund.get("refund_type"),
+                 refund.get("status_description"), refund.get("processed_at"), raw[:8000]),
+            )
+        else:
+            conn.execute(
+                "UPDATE refunds SET status = ?, status_description = ?, raw_payload = ?"
+                " WHERE cf_refund_id = ?",
+                (status, refund.get("status_description"), raw[:8000], cf_refund_id),
+            )
+
+        # Only a SUCCESS moves credits, and only once — credits_reclaimed being
+        # non-null is the guard against a re-delivered webhook clawing twice.
+        if status != "SUCCESS" or (existing and existing["credits_reclaimed"] is not None):
+            return {"reclaimed": 0, "status": status, "orderId": order_id}
+
+        paid_paise = int(order["amount_paise"]) or 1
+        # Cap against what is STILL reclaimable, not just against the pack
+        # size: several refunds can land on one order, and their sum must
+        # never take back more credits than the order granted. Without this a
+        # duplicate refund under a fresh cf_refund_id would put an honest
+        # customer into false debt.
+        remaining = int(order["credits"]) - int(order["credits_reclaimed"] or 0)
+        credits_back = max(0, min(
+            remaining,
+            round(int(order["credits"]) * amount_paise / paid_paise),
+        ))
+        if credits_back <= 0:
+            conn.execute(
+                "UPDATE refunds SET credits_reclaimed = 0, reclaimed_at = CURRENT_TIMESTAMP"
+                " WHERE cf_refund_id = ?", (cf_refund_id,))
+            return {"reclaimed": 0, "status": status, "orderId": order_id}
+
+        credits.ensure_account(conn, order["user_id"])
+        balance = credits.apply(
+            conn, order["user_id"], -credits_back, credits.REFUND_REVERSAL,
+            ref_type="refund", ref_id=cf_refund_id,
+            idempotency_key=f"refund:{cf_refund_id}",
+            allow_negative=True,
+        )
+        conn.execute(
+            "UPDATE refunds SET credits_reclaimed = ?, reclaimed_at = CURRENT_TIMESTAMP"
+            " WHERE cf_refund_id = ?", (credits_back, cf_refund_id))
+
+        total_refunded = int(order["refunded_paise"]) + amount_paise
+        conn.execute(
+            "UPDATE payment_orders SET refunded_paise = ?,"
+            " credits_reclaimed = credits_reclaimed + ?, refunded_at = CURRENT_TIMESTAMP,"
+            " status = ?, last_event_type = ?, updated_at = CURRENT_TIMESTAMP"
+            " WHERE order_id = ?",
+            (total_refunded, credits_back,
+             "refunded" if total_refunded >= paid_paise else "partially_refunded",
+             payload.get("type"), order_id),
+        )
+
+    logger.info("billing: refund %s on order %s reclaimed %d credit(s) from %s (balance now %s)",
+                cf_refund_id, order_id, credits_back, order["user_id"], balance)
+    return {"reclaimed": credits_back, "status": status, "orderId": order_id,
+            "balance": balance}
+
+
 def sync_from_cashfree(order_id: str) -> dict:
     """Re-read the order from Cashfree and settle it if genuinely paid.
 

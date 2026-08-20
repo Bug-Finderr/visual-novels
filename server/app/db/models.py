@@ -300,15 +300,56 @@ class PaymentOrder(Base):
     credits = Column(Integer, nullable=False)
     amount_paise = Column(Integer, nullable=False)   # paise, never float
     currency = Column(String, nullable=False, server_default="INR")
-    status = Column(String, nullable=False, server_default="created")  # created|paid|failed|expired
+    # created|paid|failed|abandoned|expired|refunded|partially_refunded
+    status = Column(String, nullable=False, server_default="created")
     customer_phone = Column(String)                  # Cashfree requires one per order
     cf_order_id = Column(String)
     payment_session_id = Column(Text)
     cf_payment_id = Column(String)
     credited_at = Column(DateTime)                   # non-null == credits granted
     raw_status_payload = Column(Text)
+    # Why a payment didn't land, lifted out of the webhook's error_details so
+    # "what is failing for our users" is a GROUP BY rather than hand-reading
+    # JSON blobs. 'abandoned' (user dropped at OTP/UPI-PIN) is tracked apart
+    # from 'failed' (bank declined) because they call for different fixes.
+    failure_code = Column(String)
+    failure_reason = Column(String)
+    failure_description = Column(Text)
+    last_event_type = Column(String)
+    # Refund totals, maintained from REFUND_STATUS_WEBHOOK. Partial refunds
+    # accumulate here; per-refund detail lives in `refunds`.
+    refunded_paise = Column(Integer, nullable=False, server_default="0")
+    credits_reclaimed = Column(Integer, nullable=False, server_default="0")
+    refunded_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Refund(Base):
+    """A refund against a paid order, learned from REFUND_STATUS_WEBHOOK.
+
+    Refunds are initiated from the Cashfree dashboard, not from this app — but
+    the credits they bought must come back, or a customer gets their money AND
+    keeps the stories. One row per refund because an order can be refunded
+    partially, more than once.
+    """
+    __tablename__ = "refunds"
+    cf_refund_id = Column(String, primary_key=True)   # Cashfree's id; natural dedupe key
+    order_id = Column(String, ForeignKey("payment_orders.order_id", ondelete="CASCADE"),
+                      nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    refund_id = Column(String)                        # merchant-side id, if set
+    amount_paise = Column(Integer, nullable=False)
+    status = Column(String, nullable=False)           # SUCCESS|PENDING|CANCELLED|ONHOLD
+    refund_type = Column(String)                      # MERCHANT_INITIATED|PAYMENT_AUTO_REFUND
+    status_description = Column(Text)
+    # Credits taken back. Non-null == the clawback has been applied, which is
+    # what keeps a repeated webhook from reclaiming twice.
+    credits_reclaimed = Column(Integer)
+    reclaimed_at = Column(DateTime)
+    processed_at = Column(DateTime)
+    raw_payload = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class WebhookEvent(Base):

@@ -122,7 +122,14 @@ Cashfree issues sandbox credentials the moment you sign up, before any verificat
    - `CASHFREE_APP_ID` and `CASHFREE_SECRET_KEY` = the sandbox pair
    - `CASHFREE_ENV` = `sandbox`
    - `BILLING_ENABLED` = `1`
-4. **Developers → Webhooks → Add Webhook Endpoint**: `https://api.storyplex.app/api/v1/billing/webhook/cashfree`, subscribed to the payment events. Cashfree signs each delivery; the endpoint rejects anything whose HMAC doesn't verify.
+4. **Developers → Webhooks → Add Webhook Endpoint**: `https://api.storyplex.app/api/v1/billing/webhook/cashfree`. Cashfree signs each delivery; the endpoint rejects anything whose HMAC doesn't verify. Subscribe to **all four**:
+
+   | Event | What it does here |
+   |---|---|
+   | `PAYMENT_SUCCESS_WEBHOOK` | Credits the order. The backstop for a customer who closes the tab before the return page loads. |
+   | `PAYMENT_FAILED_WEBHOOK` | Records the bank's decline reason on the order (`failed`). |
+   | `PAYMENT_USER_DROPPED_WEBHOOK` | Records checkout abandonment (`abandoned`) — tracked apart from a decline, because it usually means checkout friction you can fix. |
+   | `REFUND_STATUS_WEBHOOK` | **Takes the credits back.** Refunds are raised from the Cashfree dashboard, so this is the only way the app learns money went back — without it a refunded customer keeps their credits. |
 5. Buy the ₹199 pack on `https://storyplex.app/billing` with a [sandbox test instrument](https://www.cashfree.com/docs/payments/online/testing) — the balance should tick up before you're even back on the return page.
 
 ### 6.2 Going live
@@ -147,6 +154,30 @@ Once approved: swap `CASHFREE_APP_ID`/`CASHFREE_SECRET_KEY` for the production p
 | `FREE_STORY_CREDITS` | `2` | Granted once, on first touch of a user's account. Changing it never re-grants to existing users. |
 | `CREDITS_PER_GENERATION` | `1` | Credits burned per story (and per chapter continuation). |
 | `REFUND_ON_GENERATION_FAILURE` | `0` | `1` hands the credit back when the pipeline errors. Flip during a Gemini outage. |
+
+### 6.4 Refunds
+
+Issue refunds from the **Cashfree dashboard** (Payments → find the order → Refund). There is no refund button in StoryPlex.
+
+The `REFUND_STATUS_WEBHOOK` then takes the credits back automatically, in proportion to the amount refunded — a half refund reclaims half the credits. **If the customer already spent them, the balance goes negative**, which is deliberate: it's the honest record, and it blocks further generation until they buy back in. Repeated or over-100% refunds can't reclaim more than the order granted.
+
+Check what happened afterwards:
+
+```sql
+SELECT r.cf_refund_id, r.amount_paise, r.status, r.credits_reclaimed, o.status
+FROM refunds r JOIN payment_orders o ON o.order_id = r.order_id
+ORDER BY r.created_at DESC LIMIT 10;
+```
+
+### 6.5 Operations report
+
+```bash
+cd server && ./.venv/bin/python scripts/billing_report.py --days 7
+```
+
+Revenue net of refunds, checkout conversion, **why payments are failing** (ranked), orders left open over an hour, negative balances, unprocessed webhooks, and outstanding credit liability in Gemini spend.
+
+### 6.6 Ledger
 
 Every credit movement is in `credit_ledger`, so a disputed balance is answerable with one query:
 
