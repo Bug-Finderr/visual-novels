@@ -1,58 +1,71 @@
-# Deploying StoryPlex to Render + Netlify (fastest path — same-day demo)
+# Deploying StoryPlex to Render (backend + frontend + DB, same-day demo)
 
 Production topology:
 
 ```
   Browser
-    │  static SPA                 ┌─────────────────────────────┐
-    ├───────────────────────────▶│ Netlify (client/dist)        │
-    │                             └─────────────────────────────┘
+    │  static SPA                   ┌──────────────────────────────┐
+    ├─────────────────────────────▶│ Render Static Site (client/dist)│
+    │                                └──────────────────────────────┘
     │  REST + OAuth + WSS /api/v1  ┌────────────────────────────┐
     └────────────────────────────▶│ Render Web Service (FastAPI)│──▶ Render Postgres
                                     └────────────────────────────┘
 ```
 
-- **Frontend**: Netlify serves the Vite build (`netlify.toml` already configured).
+- **Frontend**: Render Static Site serves the Vite build. Free regardless of the backend's paid plan — CDN + managed TLS + custom domains (2 free per workspace) included. (Netlify works too, and `netlify.toml` is still in the repo for that — but org-owned private repos hit Netlify's paid-plan wall, which is why this doc defaults to Render for both.)
 - **Backend**: FastAPI on a Render Web Service (container in `server/Dockerfile`). Migrations run automatically on every boot (`alembic upgrade head` before `uvicorn` starts).
 - **DB**: Render-managed Postgres, same platform/network as the web service.
 - **Assets**: `ASSET_BACKEND=local` — generated images/audio are served straight off the web service's disk via `/api/v1/assets/...`. Simplest option, zero extra setup. They're **ephemeral**: a redeploy or restart wipes them (fine for a demo; add a Render Disk later if you need them to survive restarts — see the bottom of this doc).
 
-> Unlike the GCP path in `DEPLOY.md`, Render doesn't freeze CPU between requests, so the `--no-cpu-throttling` / single-instance dance that Cloud Run needs isn't a thing here — just don't use the free instance tier (it sleeps after 15 min idle) and don't turn on autoscaling (the in-memory generation-progress dict only lives on one instance).
+> Unlike the GCP path in `DEPLOY.md`, Render doesn't freeze CPU between requests, so the `--no-cpu-throttling` / single-instance dance that Cloud Run needs isn't a thing here — just don't use the free instance tier for the backend (it sleeps after 15 min idle) and don't turn on autoscaling (the in-memory generation-progress dict only lives on one instance).
 
 ---
 
 ## Prerequisites
 
-- A Render account (render.com) with billing set up (the web service needs a paid plan — see below).
-- A Netlify account (or the `netlify` CLI).
+- A Render account with billing set up (the backend web service needs a paid plan — see below; the static site is free).
 - Your secrets ready: `GEMINI_API_KEY`, `SILK_API_KEY`, Google OAuth `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
-- This repo pushed to GitHub/GitLab (Render deploys from a connected repo).
+- This repo pushed to GitHub (Render deploys from a connected repo).
 
 ---
 
-## 1. Deploy the backend — via the `render.yaml` Blueprint
+## 1. Deploy everything — via the `render.yaml` Blueprint
 
-The repo root has a `render.yaml` that provisions the web service + Postgres together in one shot.
+The repo root has a `render.yaml` that provisions the Postgres DB, the backend web service, **and** the frontend static site together, in one shot. The two services reference each other by their fixed names (`storyplex-api`, `storyplex-web`), so their URLs are predictable and pre-wired — no manual URL-copying between dashboards.
 
-1. Push this branch (with `render.yaml`, the updated `server/Dockerfile`, and `server/app/config.py`) to your Git remote.
-2. In the Render dashboard: **New + → Blueprint**.
-3. Connect the repo and select it. Render reads `render.yaml` and shows you a plan: one Postgres database (`storyplex-db`, free tier) and one Web Service (`storyplex-api`, Standard plan, Docker runtime pointed at `server/Dockerfile`).
-4. Render will prompt you for the env vars marked `sync: false` in the blueprint — fill in:
+1. Push this branch (with `render.yaml`, `server/Dockerfile`, `server/app/config.py`) to your Git remote.
+2. Render dashboard → **New + → Blueprint** → connect the repo.
+3. Render reads `render.yaml` and shows the plan: Postgres (`storyplex-db`, free tier), a Web Service (`storyplex-api`, Standard plan, Docker), and a Static Site (`storyplex-web`, free).
+4. Render prompts for the env vars marked `sync: false` — fill in:
    - `GEMINI_API_KEY`
    - `SILK_API_KEY`
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
-   - `ALLOWED_ORIGINS` — leave blank for now, you'll set it in step 4 below once Netlify exists.
-5. Click **Apply**. Render provisions the Postgres instance, builds the Docker image, runs the container (which runs `alembic upgrade head` automatically, then starts `uvicorn`).
-6. Once it's live, your API URL is `https://storyplex-api.onrender.com` (or check the exact URL in the service's dashboard page — Render appends a suffix if that name is already taken by someone else).
+5. Click **Apply**. Render provisions Postgres, builds+deploys the backend container (runs `alembic upgrade head` then starts `uvicorn`), and builds+deploys the static site (`npm install && npm run build` → publishes `client/dist`).
+6. Once both are live:
+   - API: `https://storyplex-api.onrender.com`
+   - App: `https://storyplex-web.onrender.com`
 
-**Why Standard plan, not free/Starter:** this backend loads `onnxruntime` + `rembg` for sprite background-removal, which alone eats a few hundred MB at import time. Render's free tier (sleeps after 15 min idle) and Starter tier (512MB RAM) both risk breaking mid-generation or mid-demo. Standard (2GB) matches what `DEPLOY.md` already provisions on Cloud Run for the same reason. If you don't have a Render Blueprint plan restriction preventing Standard, keep it — it's $25/mo, cancel/downgrade after the demo if you don't need it running.
+   (Render service names are globally unique — if either name was already taken by someone else, Render appends a suffix. If that happens, the blueprint's cross-referencing env vars — `GOOGLE_REDIRECT_URI`, `ALLOWED_ORIGINS` on the API; `VITE_API_BASE`, `VITE_ASSET_BASE` on the web service — won't match reality. Fix those three by hand in each service's Environment tab, which triggers a redeploy.)
+
+**Why Standard plan for the backend, not free/Starter:** it loads `onnxruntime` + `rembg` for sprite background-removal, which alone eats a few hundred MB at import time. Render's free tier (sleeps after 15 min idle) and Starter tier (512MB RAM) both risk breaking mid-generation or mid-demo. Standard (2GB) matches what `DEPLOY.md` already provisions on Cloud Run for the same reason — $25/mo, cancel/downgrade after the demo if you don't need it running. The static site costs nothing regardless of which backend plan you pick.
 
 **No Blueprint access, or you'd rather click through manually?** See "Manual dashboard steps" at the bottom.
 
 ---
 
-## 2. Smoke-test the backend
+## 2. Google OAuth client
+
+In Google Cloud Console → **APIs & Services → Credentials → your OAuth client**, add:
+
+- **Authorized redirect URI**: `https://storyplex-api.onrender.com/api/v1/auth/google/callback`
+- **Authorized JavaScript origins**: `https://storyplex-web.onrender.com` and `https://storyplex-api.onrender.com`
+
+(Use the actual URLs from step 1.6 if either got a name-collision suffix.)
+
+---
+
+## 3. Post-deploy smoke test
 
 ```bash
 curl -s https://storyplex-api.onrender.com/api/v1/health
@@ -61,59 +74,15 @@ curl -s https://storyplex-api.onrender.com/api/v1/me
 # {"user":null,"googleAuthEnabled":true}
 ```
 
-If `googleAuthEnabled` is `false`, double-check `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` landed in the service's Environment tab.
+If `googleAuthEnabled` is `false`, double-check the Google secrets landed in `storyplex-api`'s Environment tab.
 
----
-
-## 3. Deploy the frontend to Netlify
-
-`netlify.toml` (repo root) already sets `base=client`, `command=npm run build`, `publish=client/dist`, and the SPA fallback.
-
-1. Netlify UI → **Add new site → Import an existing project** → connect the repo.
-2. Netlify auto-detects `netlify.toml`. Before the first deploy (or right after, then redeploy), set in **Site settings → Environment variables**:
-   ```
-   VITE_API_BASE   = https://storyplex-api.onrender.com/api/v1
-   VITE_ASSET_BASE = https://storyplex-api.onrender.com/api/v1/assets
-   ```
-   (Use your actual Render URL from step 1.6 if it got a suffix.)
-3. Deploy. Note the site URL — either the random `*.netlify.app` one, or set a custom subdomain in **Site settings → Domain management** for something more demo-friendly (e.g. `storyplex-demo.netlify.app`).
-
----
-
-## 4. Wire the two together — set `ALLOWED_ORIGINS` on Render
-
-Back in the Render dashboard, `storyplex-api` → **Environment**:
-
-```
-ALLOWED_ORIGINS = https://<your-netlify-site>.netlify.app
-```
-
-Save — Render redeploys automatically with the new value. This is also the post-login redirect target, so Google sign-in lands back on the right site.
-
----
-
-## 5. Google OAuth client
-
-In Google Cloud Console → **APIs & Services → Credentials → your OAuth client**, add:
-
-- **Authorized redirect URI**: `https://storyplex-api.onrender.com/api/v1/auth/google/callback`
-- **Authorized JavaScript origins**: `https://<your-netlify-site>.netlify.app` and `https://storyplex-api.onrender.com`
-
----
-
-## 6. Post-deploy smoke test
-
-```bash
-curl -s https://storyplex-api.onrender.com/api/v1/health
-```
-
-Then open the Netlify URL, sign in with Google, create a story, hit Play — scene art/audio load from the Render backend, TTS streams over `wss://` directly to Render (Netlify can't proxy WebSockets, which is why `VITE_API_BASE` points at the real Render origin rather than a Netlify proxy path).
+Then open `https://storyplex-web.onrender.com`, sign in with Google, create a story, hit Play — scene art/audio load from the backend, TTS streams over `wss://` directly to Render (a static site can't proxy WebSockets any more than Netlify could, which is why `VITE_API_BASE` points at the real backend origin, not a same-origin proxy path).
 
 ---
 
 ## Cookies note
 
-Netlify (`*.netlify.app`) and Render (`*.onrender.com`) are different sites, so the blueprint sets `SESSION_COOKIE_SAMESITE=none` + `SESSION_COOKIE_SECURE=1` — this relies on third-party cookies, which Safari blocks and Chrome is phasing out. Fine for today's demo; if this becomes a real deployment, put both behind one root domain (`app.yourdomain.com` / `api.yourdomain.com`) and switch to `SESSION_COOKIE_SAMESITE=lax`.
+`storyplex-web.onrender.com` and `storyplex-api.onrender.com` are different hosts under Render's multi-tenant domain, so the blueprint sets `SESSION_COOKIE_SAMESITE=none` + `SESSION_COOKIE_SECURE=1` — this relies on third-party cookies, which Safari blocks and Chrome is phasing out. Fine for today's demo. If this becomes a real deployment, put both services behind custom subdomains of **one domain you own** (`app.yourdomain.com` / `api.yourdomain.com` — 2 free custom domains are included per Render workspace) and switch to `SESSION_COOKIE_SAMESITE=lax`; same-registrable-domain cookies avoid the third-party-cookie problem entirely.
 
 ---
 
@@ -126,8 +95,12 @@ Netlify (`*.netlify.app`) and Render (`*.onrender.com`) are different sites, so 
    - **Docker build context**: `server`
    - **Plan**: Standard
    - **Health check path**: `/api/v1/health`
-3. In the new service's **Environment** tab, add every var listed in `render.yaml`'s `envVars` (same keys/values), pasting the Postgres Internal Database URL from step 1 as `DATABASE_URL` — the app now auto-rewrites `postgresql://` to the `postgresql+psycopg://` driver form it needs, so paste it as-is.
-4. Deploy, then continue from step 2 above.
+   - Env vars: same keys/values as `render.yaml`'s `storyplex-api` block, pasting the Postgres Internal Database URL from step 1 as `DATABASE_URL` as-is (the app auto-rewrites `postgresql://` to the `postgresql+psycopg://` driver form it needs).
+3. **New + → Static Site** → connect the same repo. Set:
+   - **Build command**: `npm install && npm run build`
+   - **Publish directory**: `client/dist`
+   - Env vars: `VITE_API_BASE` / `VITE_ASSET_BASE`, pointing at the web service's URL from step 2 (as in `render.yaml`'s `storyplex-web` block).
+4. Back in the web service, set `ALLOWED_ORIGINS` to the static site's URL from step 3, and `GOOGLE_REDIRECT_URI` to its own `/api/v1/auth/google/callback` — then continue from step 2 (Google OAuth client) above.
 
 ## Optional: persist generated assets across restarts
 
