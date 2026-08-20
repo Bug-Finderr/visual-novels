@@ -22,7 +22,9 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-# Cloud Run injects $PORT (default 8080). uvicorn (not gunicorn) so the TTS
-# WebSocket route works out of the box.
+# Cloud Run / Render both inject $PORT (default 8080). uvicorn (not gunicorn)
+# so the TTS WebSocket route works out of the box. Migrations run on every
+# boot — `alembic upgrade head` is a no-op once the DB is current, so this
+# stays safe across restarts/redeploys without a separate migrate step.
 EXPOSE 8080
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
