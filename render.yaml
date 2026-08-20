@@ -1,0 +1,60 @@
+# Render Blueprint for the StoryPlex backend + Postgres.
+# Apply via Render dashboard: New + -> Blueprint -> select this repo.
+# See DEPLOY-RENDER.md for the full walkthrough (secrets, Netlify wiring,
+# Google OAuth client update).
+#
+# Free Postgres expires 30 days after creation — fine for a same-day demo;
+# switch `plan: free` below to `basic-256mb` ($6/mo) before then if this
+# needs to stick around.
+
+databases:
+  - name: storyplex-db
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: storyplex-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: standard
+    region: oregon
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: storyplex-db
+          property: connectionString
+      - key: ASSET_BACKEND
+        value: local
+      - key: STORYGEN_ENGINE
+        value: graph
+      # Netlify (*.netlify.app) and Render (*.onrender.com) are different
+      # sites, so the session cookie needs cross-site settings. Switch to
+      # `lax` + drop Secure only if you later put both behind one custom
+      # domain (see DEPLOY-RENDER.md).
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: SESSION_COOKIE_SAMESITE
+        value: none
+      - key: SESSION_SECRET
+        generateValue: true
+      # Predictable from this blueprint's fixed service name — update if you
+      # rename the service (Render service names are globally unique, so
+      # this may get a suffix if "storyplex-api" is taken).
+      - key: GOOGLE_REDIRECT_URI
+        value: https://storyplex-api.onrender.com/api/v1/auth/google/callback
+      # Filled in after the Netlify deploy exists (step 4 in DEPLOY-RENDER.md).
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Secrets — entered once in the Render dashboard during blueprint setup,
+      # never committed to the repo.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SILK_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
