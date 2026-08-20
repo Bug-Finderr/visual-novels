@@ -30,6 +30,17 @@ def _serve(key: str, media_type: str, headers: dict, not_found: str):
 @router.get("/{session_id}/characters/{character_id}/{filename}")
 def serve_character_sprite(session_id: str, character_id: str, filename: str):
     key = f"{session_id}/characters/{character_id}/{filename}"
+    if not filename.startswith("overlay_") and not storage.backend.exists(key):
+        # Expression sprites are now generated selectively — only the ones
+        # the story's actual script uses (see routes/generation.py's usage
+        # scan) — so a live/runtime path can legitimately ask for an
+        # expression that was never pre-rendered (e.g. the free-text
+        # Beat-Rewrite Agent choosing one no pre-rendered beat happened to
+        # use). Fall back to the neutral sprite, which is always generated,
+        # instead of 404ing to a blank character. Overlays are exempt — a
+        # missing overlay is expected already (see _is_usable_overlay) and
+        # the client handles that by running motion-only for that character.
+        key = f"{session_id}/characters/{character_id}/neutral.png"
     return _serve(key, "image/png", _IMMUTABLE, "Sprite not found")
 
 

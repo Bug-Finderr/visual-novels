@@ -25,6 +25,23 @@ def get(session_id: str, ending_id: str) -> dict | None:
         return None
 
 
+def all_statements_for_session(session_id: str) -> list[list[dict]]:
+    """Every cached ending's statements for this session — see
+    beat_expansions.all_statements_for_session for why."""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT statements FROM ending_dialogue WHERE session_id = ?",
+            (session_id,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            out.append(json.loads(r["statements"]))
+        except Exception:
+            continue
+    return out
+
+
 def save(session_id: str, ending_id: str, statements: list) -> None:
     payload = json.dumps(statements, ensure_ascii=False)
     with db() as conn:

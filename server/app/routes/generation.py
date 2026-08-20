@@ -9,7 +9,9 @@ from fastapi.responses import StreamingResponse
 
 from app.auth.deps import require_owner, require_readable
 
+from app.db.queries import beat_expansions as beat_expansions_queries
 from app.db.queries import characters as character_queries
+from app.db.queries import ending_dialogue as ending_dialogue_queries
 from app.db.queries import scenes as scene_queries
 from app.db.queries import sessions as session_queries
 from app.logger import logger
@@ -76,6 +78,30 @@ def _build_continuation_context(session: dict) -> dict | None:
     }
 
 
+def _collect_used_expressions(session_id: str, opening_script: list[dict]) -> dict[str, set[str]]:
+    """Scan every generated statement (opening + every pre-rendered beat
+    variant + every ending epilogue) for which (characterId, expression)
+    pairs actually get shown. Must run after Phase A0's text pre-generation,
+    since expression is a per-line choice the model makes during beat
+    expansion — the spine only has beat outlines, not this level of detail.
+    """
+    used: dict[str, set[str]] = {}
+
+    def _scan(statements: list[dict] | None) -> None:
+        for stmt in statements or []:
+            if isinstance(stmt, dict) and stmt.get("type") == "dialogue":
+                cid, expr = stmt.get("speaker"), stmt.get("expression")
+                if cid and expr:
+                    used.setdefault(cid, set()).add(expr)
+
+    _scan(opening_script)
+    for statements in beat_expansions_queries.all_statements_for_session(session_id):
+        _scan(statements)
+    for statements in ending_dialogue_queries.all_statements_for_session(session_id):
+        _scan(statements)
+    return used
+
+
 def _run_pipeline(session_id: str, session: dict) -> None:
     setup = {
         "genre": session["setup_genre"],
@@ -102,30 +128,101 @@ def _run_pipeline(session_id: str, session: dict) -> None:
     session_service.save_story_data(session_id, story_data)
 
     characters = story_data["characters"]
-    # Scenes = full catalogue + any ending scenes that only live in endings[].
-    scenes = list(story_data.get("scenes") or [])
-    scene_ids = {s["id"] for s in scenes}
-    for ending in story_data.get("endings") or []:
-        fid = ending.get("finalSceneId")
-        if fid and fid not in scene_ids:
+    # Scenes: only the ones a beat or ending actually points at. The world
+    # agent's catalogue can run a bit ahead of what the chapter agent ends up
+    # using, and every beat/ending scene reference is guaranteed satisfiable
+    # here (dialogue_engine._ensure_scene_change forces exactly these ids at
+    # runtime) — so anything outside this set is never displayed, and
+    # generating its background would be pure waste.
+    catalogue = {s["id"]: s for s in (story_data.get("scenes") or [])}
+    used_scene_ids = {
+        b.get("sceneId") for b in story_data.get("storySpine") or [] if b.get("sceneId")
+    }
+    used_scene_ids |= {
+        e.get("finalSceneId") for e in story_data.get("endings") or [] if e.get("finalSceneId")
+    }
+    scenes = []
+    for sid in used_scene_ids:
+        if sid in catalogue:
+            scenes.append(catalogue[sid])
+        else:
+            # Referenced only by an ending, never in the world agent's own
+            # catalogue — synthesize a minimal entry from the ending itself.
+            ending = next(
+                (e for e in story_data.get("endings") or [] if e.get("finalSceneId") == sid),
+                None,
+            )
             scenes.append({
-                "id": fid,
-                "name": f"{ending.get('name', 'Ending')} scene",
-                "description": ending.get("epilogueOutline") or ending.get("summary") or "",
+                "id": sid,
+                "name": f"{ending.get('name', 'Ending')} scene" if ending else sid,
+                "description": (ending.get("epilogueOutline") or ending.get("summary") or "")
+                if ending else "",
             })
-            scene_ids.add(fid)
 
     _set_progress(
         session_id, step="story_done", progress=12,
         details=f"World \"{story_data['worldLore']['name']}\" — "
-                f"{len(characters)} characters, {len(scenes)} scenes, "
+                f"{len(characters)} characters, {len(scenes)} scenes used, "
                 f"{len(story_data.get('storySpine', []))} beats, "
                 f"{len(story_data.get('endings', []))} endings",
     )
 
     # =====================================================================
-    # PHASE A: Neutral sprite per character (identity anchor for emotions).
-    # Parallel across characters. ~12 s instead of ~48 s for 4 chars.
+    # PHASE A0: Full script text — beat variants + ending epilogues — BEFORE
+    # any images. This is what makes selective sprite generation possible:
+    # which (character, expression) pairs actually get shown is only known
+    # once every beat/ending has been expanded into real dialogue statements
+    # (the spine only has beat *outlines*, not per-line expressions). Text is
+    # ~100x cheaper than images (Flash vs. image-gen pricing), so generating
+    # some that turn out unused (e.g. a beat variant for a branch the player
+    # never picks) is cheap; generating an unused SPRITE is not.
+    # =====================================================================
+    from app.services.ai import dialogue_engine  # local import — heavy module
+
+    pregen_total = max(0, (len(story_data.get("storySpine") or []) - 2) * 3)
+    if pregen_total > 0:
+        _set_progress(session_id, step="pre_render", progress=14,
+                      details="Writing every branch of the story...")
+        pregen_done = {"n": 0}
+        def _pregen_progress(idx: int) -> None:
+            pregen_done["n"] += 1
+            _set_progress(
+                session_id, step="pre_render",
+                progress=14 + round(pregen_done["n"] / max(pregen_total, 1) * 18),
+                details=f"Writing branch variants ({pregen_done['n']}/{pregen_total})",
+            )
+        try:
+            dialogue_engine.pre_expand_remaining_beats(session_id, _pregen_progress)
+        except Exception as err:
+            logger.warning("beat pre-gen failed: %s", err)
+
+    ending_count = len(story_data.get("endings") or [])
+    if ending_count:
+        _set_progress(session_id, step="endings", progress=32,
+                      details="Writing every ending...")
+        ending_done = {"n": 0}
+        def _ending_progress(eid: str) -> None:
+            ending_done["n"] += 1
+            _set_progress(
+                session_id, step="endings",
+                progress=32 + round(ending_done["n"] / max(ending_count, 1) * 6),
+                details=f"Writing endings ({ending_done['n']}/{ending_count})",
+            )
+        try:
+            dialogue_engine.pre_expand_all_endings(session_id, _ending_progress)
+        except Exception as err:
+            logger.warning("ending pre-render failed: %s", err)
+
+    used_expressions = _collect_used_expressions(session_id, story_data.get("openingScript") or [])
+    logger.info(
+        "usage scan: %s",
+        {c["id"]: sorted(used_expressions.get(c["id"], set())) for c in characters},
+    )
+
+    # =====================================================================
+    # PHASE A: Neutral sprite per character (identity anchor for emotions,
+    # and the runtime fallback for any expression that wasn't generated —
+    # see routes/assets.py). Parallel across characters.
     # =====================================================================
     neutral_images: dict[str, bytes] = {}
     neutrals_done = {"n": 0}
@@ -144,20 +241,23 @@ def _run_pipeline(session_id: str, session: dict) -> None:
             neutrals_done["n"] += 1
             _set_progress(
                 session_id, step="sprites",
-                progress=12 + round(neutrals_done["n"] / max(len(characters), 1) * 8),
+                progress=38 + round(neutrals_done["n"] / max(len(characters), 1) * 8),
                 details=f"Drawing anchor portraits ({neutrals_done['n']}/{len(characters)})",
             )
 
     # =====================================================================
-    # PHASE B: All non-neutral emotion sprites AND all scene backgrounds in
-    # one shared parallel pool. They share the Gemini Image quota so batching
-    # them together prevents idle workers waiting on different stages.
+    # PHASE B: Non-neutral emotion sprites — only the ones the usage scan
+    # found (a beat or ending statement actually shows this character with
+    # this expression) — AND scene backgrounds, in one shared parallel pool.
+    # Anything not generated here falls back to the neutral sprite at
+    # request time (see routes/assets.py) if a live/runtime path ever calls
+    # for it anyway (e.g. the free-text Beat-Rewrite Agent).
     # =====================================================================
     sprite_tasks: list[tuple[dict, str]] = []
     for c in characters:
         if c["id"] not in neutral_images:
             continue
-        for expr in image_generator.EXPRESSIONS:
+        for expr in used_expressions.get(c["id"], set()):
             if expr == "neutral":
                 continue
             sprite_tasks.append((c, expr))
@@ -170,7 +270,7 @@ def _run_pipeline(session_id: str, session: dict) -> None:
         images_done["n"] += 1
         _set_progress(
             session_id, step=step,
-            progress=20 + round(images_done["n"] / max(total_images, 1) * 50),
+            progress=46 + round(images_done["n"] / max(total_images, 1) * 34),
             details=f"{label} ({images_done['n']}/{total_images})",
         )
 
@@ -233,43 +333,14 @@ def _run_pipeline(session_id: str, session: dict) -> None:
             character_queries.mark_sprites_generated(session_id, c["id"])
 
     # =====================================================================
-    # PHASE C: Overlays (transparent blink/mouth layers) + script binding +
-    # beat pre-generation, in parallel.
-    #   - Overlays use Gemini Image API.
-    #   - Beat pre-gen uses Gemini Flash (text) — different API, no contention.
-    # We start the beat pre-gen first so it has the entire overlay phase to
-    # complete before Phase D.
+    # PHASE C: Overlays (transparent blink/mouth layers). Beat/ending text
+    # pre-generation already happened in Phase A0, before any images.
     # =====================================================================
-    from app.services.ai import dialogue_engine  # local import — heavy module
-
-    pregen_future = None
-    # 3 variants per beat × (spine - 2) beats — each beat after the opening
-    # gets one variant per choice the player could have taken to get here,
-    # so the next scene reacts to the actual choice.
-    pregen_total = max(0, (len(story_data.get("storySpine") or []) - 2) * 3)
-    if pregen_total > 0:
-        pregen_done = {"n": 0}
-        def _pregen_progress(idx: int) -> None:
-            pregen_done["n"] += 1
-            _set_progress(
-                session_id, step="pre_render",
-                progress=72 + round(pregen_done["n"] / max(pregen_total, 1) * 15),
-                details=f"Pre-rendering branch variants "
-                        f"({pregen_done['n']}/{pregen_total})",
-            )
-        # Run pre-gen in its own pool. It returns when all variants are cached.
-        pregen_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="pregen")
-        pregen_future = pregen_executor.submit(
-            dialogue_engine.pre_expand_remaining_beats,
-            session_id, _pregen_progress,
-        )
-
-    # Overlays in parallel — internal parallelism handled inside the function.
     overlay_done = {"n": 0}
     overlay_total = len(characters) * len(animation_generator.OVERLAYS)
     def _overlay_cb(overlay: str, _i: int, _t: int) -> None:
         overlay_done["n"] += 1
-        pct = 72 + round(overlay_done["n"] / max(overlay_total, 1) * 8)
+        pct = 80 + round(overlay_done["n"] / max(overlay_total, 1) * 8)
         _set_progress(
             session_id, step="animations", progress=pct,
             details=f"Rigging overlays ({overlay_done['n']}/{overlay_total})",
@@ -292,20 +363,10 @@ def _run_pipeline(session_id: str, session: dict) -> None:
         # run 2 chars at a time to stay under the image API ceiling.
         list(pool.map(_gen_overlays, characters))
 
-    # Wait for beat pre-gen to finish (almost certainly already done by now
-    # because images are slower than text).
-    if pregen_future:
-        try:
-            pregen_future.result(timeout=180)
-        except Exception as err:
-            logger.warning("beat pre-gen pool failed: %s", err)
-        finally:
-            pregen_executor.shutdown(wait=False)
-
     # =====================================================================
-    # PHASE D: Script + voice profiles + ending pre-render.
+    # PHASE D: Script binding + voice profiles.
     # =====================================================================
-    _set_progress(session_id, step="script", progress=83, details="Binding the script...")
+    _set_progress(session_id, step="script", progress=88, details="Binding the script...")
 
     script = script_builder.build_initial_script(story_data)
     for label_name, statements in script.items():
@@ -317,22 +378,6 @@ def _run_pipeline(session_id: str, session: dict) -> None:
             logger.info("voice profiles assigned for %d characters", n_voices)
         except Exception as err:
             logger.warning("voice profile pass failed: %s", err)
-
-    # Pre-render every candidate ending in parallel (4 workers).
-    ending_count = len(story_data.get("endings") or [])
-    if ending_count:
-        ending_done = {"n": 0}
-        def _ending_progress(eid: str) -> None:
-            ending_done["n"] += 1
-            _set_progress(
-                session_id, step="endings",
-                progress=83 + round(ending_done["n"] / max(ending_count, 1) * 5),
-                details=f"Pre-rendering endings ({ending_done['n']}/{ending_count})",
-            )
-        try:
-            dialogue_engine.pre_expand_all_endings(session_id, _ending_progress)
-        except Exception as err:
-            logger.warning("ending pre-render failed: %s", err)
 
     # =====================================================================
     # PHASE E: Pre-render ALL audio.

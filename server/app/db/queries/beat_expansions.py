@@ -78,6 +78,24 @@ def save(
         )
 
 
+def all_statements_for_session(session_id: str) -> list[list[dict]]:
+    """Every cached variant's statements list for this session — used to scan
+    for which (character, expression) pairs and scenes a story actually uses,
+    so image generation can skip anything no beat ever calls for."""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT statements FROM beat_expansions WHERE session_id = ?",
+            (session_id,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            out.append(json.loads(r["statements"]))
+        except Exception:
+            continue
+    return out
+
+
 def variants_for_session(session_id: str) -> set[tuple[int, str]]:
     """Return {(beat_index, source_choice_tag)} for everything cached so far."""
     with db() as conn:
