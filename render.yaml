@@ -57,6 +57,29 @@ services:
         value: https://api.storyplex.app/api/v1/auth/google/callback
       - key: ALLOWED_ORIGINS
         value: https://storyplex.app
+      # --- Billing (prepaid credits + Cashfree) -------------------------
+      # OFF until the Cashfree merchant account is KYC-activated. Flip to "1"
+      # in the dashboard to start charging — no redeploy of code needed. While
+      # it is off, generation runs free and no credits are debited.
+      - key: BILLING_ENABLED
+        value: "0"
+      - key: FREE_STORY_CREDITS
+        value: "2"
+      - key: CREDITS_PER_GENERATION
+        value: "1"
+      # Each generation attempt is charged, retries included. Flip to "1"
+      # during an upstream (Gemini) outage so failures hand the credit back.
+      - key: REFUND_ON_GENERATION_FAILURE
+        value: "0"
+      # 'sandbox' until KYC clears, then 'production' — must match whichever
+      # CASHFREE_APP_ID / CASHFREE_SECRET_KEY pair is set below.
+      - key: CASHFREE_ENV
+        value: sandbox
+      - key: PUBLIC_WEB_BASE
+        value: https://storyplex.app
+      # Used to build the webhook notify_url handed to Cashfree per order.
+      - key: PUBLIC_API_BASE
+        value: https://api.storyplex.app
       # Secrets — entered once in the Render dashboard during blueprint setup,
       # never committed to the repo.
       - key: GEMINI_API_KEY
@@ -66,6 +89,10 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: CASHFREE_APP_ID
+        sync: false
+      - key: CASHFREE_SECRET_KEY
         sync: false
 
   # The SPA, as a Render Static Site — free regardless of the web service's
