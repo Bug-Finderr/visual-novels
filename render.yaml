@@ -44,6 +44,16 @@ services:
         value: /etc/secrets/gcs-key.json
       - key: STORYGEN_ENGINE
         value: graph
+      # Model ids. Set here (not only in code) because Google retires models on
+      # their own schedule — the 2.5 line began returning 404 "no longer
+      # available" while it was still the default, which took generation down.
+      # Changing these is a dashboard edit; run scripts/verify_models.py after.
+      - key: MODEL_STORY
+        value: gemini-3-flash-preview
+      - key: MODEL_DIALOGUE
+        value: gemini-3.1-flash-lite
+      - key: MODEL_IMAGE
+        value: gemini-3.1-flash-lite-image
       # Concurrent story generations; the rest QUEUE rather than pile on.
       # A pipeline peaks near 500MB against this 2GB Standard instance
       # (~130MB baseline), so 3 leaves headroom and 4-5 is the hard ceiling.

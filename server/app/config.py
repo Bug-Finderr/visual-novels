@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Annotated
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 _SERVER_DIR = Path(__file__).resolve().parent.parent
@@ -24,9 +24,22 @@ load_dotenv(_ROOT_DIR / ".env")
 
 
 class Models(BaseModel):
-    story_pro: str = "gemini-2.5-pro"
-    dialogue_flash: str = "gemini-2.5-flash"
-    image_gen: str = "gemini-2.5-flash-image"
+    """Model ids, overridable per-environment via MODEL_STORY / MODEL_DIALOGUE /
+    MODEL_IMAGE (see Config below).
+
+    Kept overridable because Google retires models on their own schedule — the
+    2.5 line started returning 404 "no longer available" while it was still
+    configured here, which took story generation down. When that happens next,
+    the fix should be an env var, not a redeploy.
+
+    Current picks (paid-tier list price, Aug 2026):
+      story    gemini-3-flash-preview     $0.50/M in, $3.00/M out
+      dialogue gemini-3.1-flash-lite      $0.25/M in, $1.50/M out
+      image    gemini-3.1-flash-lite-image  $0.0336/image
+    """
+    story_pro: str = "gemini-3-flash-preview"
+    dialogue_flash: str = "gemini-3.1-flash-lite"
+    image_gen: str = "gemini-3.1-flash-lite-image"
 
 
 class Config(BaseSettings):
@@ -131,7 +144,24 @@ class Config(BaseSettings):
     # Public origin of THIS API, for the Cashfree webhook (notify_url).
     PUBLIC_API_BASE: str | None = None
 
+    # Flat per-model overrides. Nested settings would need a delimiter syntax;
+    # three plain vars are easier to paste into a dashboard at 2am when a model
+    # has just been retired out from under you.
+    MODEL_STORY: str | None = None
+    MODEL_DIALOGUE: str | None = None
+    MODEL_IMAGE: str | None = None
+
     models: Models = Models()
+
+    @model_validator(mode="after")
+    def _apply_model_overrides(self):
+        if self.MODEL_STORY:
+            self.models.story_pro = self.MODEL_STORY.strip()
+        if self.MODEL_DIALOGUE:
+            self.models.dialogue_flash = self.MODEL_DIALOGUE.strip()
+        if self.MODEL_IMAGE:
+            self.models.image_gen = self.MODEL_IMAGE.strip()
+        return self
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
