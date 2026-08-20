@@ -15,6 +15,8 @@ Exercises:
   7. amount mismatch refuses to credit
   8. failure webhooks record WHY, and never unmark a paid order
   9. refund clawback: full, partial, replayed, and spent-then-refunded
+ 10. a refund after the credits were spent drives the balance negative
+ 11. a declined attempt reports 'failed', not an endless 'still confirming'
 
 Run:  cd server && ./.venv/bin/python scripts/verify_billing.py
 """
@@ -72,7 +74,11 @@ def _mk_session(owner_id: str) -> str:
 def _cleanup(user_ids: list[str]) -> None:
     with db() as conn:
         for uid in user_ids:
-            conn.execute("DELETE FROM users WHERE id = ?", (uid,))  # cascades
+            # sessions.owner_id is ON DELETE SET NULL, so stories do NOT
+            # cascade with their owner — drop them first or every run leaves
+            # orphans stuck in 'generating' behind.
+            conn.execute("DELETE FROM sessions WHERE owner_id = ?", (uid,))
+            conn.execute("DELETE FROM users WHERE id = ?", (uid,))
 
 
 def _status(session_id: str) -> str:
@@ -432,6 +438,83 @@ def check_refund_after_spend() -> str:
     return uid
 
 
+def check_failed_attempt_reporting() -> str:
+    print("\n[11] a declined payment reports as failed, not 'still confirming'")
+    uid = _mk_user()
+    credits.get_or_create_account(uid)
+    before = credits.balance(uid)
+
+    def _order(pack="taster", credits_n=1, paise=19900) -> str:
+        oid = f"sp_{uuid.uuid4().hex}"
+        with db() as conn:
+            conn.execute(
+                "INSERT INTO payment_orders (order_id, user_id, pack_id, credits,"
+                " amount_paise, currency, status) VALUES (?, ?, ?, ?, ?, 'INR', 'created')",
+                (oid, uid, pack, credits_n, paise),
+            )
+        return oid
+
+    real_order, real_pay = cashfree.get_order, cashfree.get_order_payments
+    # The order stays ACTIVE after a decline — this is the exact shape that
+    # used to fall through to "your payment is still being confirmed".
+    cashfree.get_order = lambda oid: {"order_status": "ACTIVE", "order_amount": 199.0}
+    try:
+        oid = _order()
+        cashfree.get_order_payments = lambda o: [{
+            "cf_payment_id": 4242, "payment_status": "FAILED",
+            "payment_time": "2026-08-20T10:00:00Z",
+            "error_details": {"error_code": "GATEWAY_ERROR",
+                              "error_reason": "card_declined",
+                              "error_description": "Issuing bank declined the card"},
+        }]
+        res = orders.sync_from_cashfree(oid)
+        _assert(res["status"] == "failed",
+                f"declined attempt -> status 'failed' (got {res['status']!r})")
+        _assert(res.get("reason") == "Issuing bank declined the card",
+                "the decline reason is passed back for the UI to show")
+        _assert(orders.get(oid)["status"] == "failed", "order row marked failed")
+        _assert(credits.balance(uid) == before, "no credits granted")
+
+        # Walked away mid-checkout — reported apart from a decline.
+        oid2 = _order()
+        cashfree.get_order_payments = lambda o: [{
+            "cf_payment_id": 4343, "payment_status": "USER_DROPPED",
+            "payment_time": "2026-08-20T10:05:00Z",
+        }]
+        res2 = orders.sync_from_cashfree(oid2)
+        _assert(res2["status"] == "abandoned",
+                f"user-dropped -> 'abandoned' (got {res2['status']!r})")
+
+        # Genuinely still in flight must NOT be called failed.
+        oid3 = _order()
+        cashfree.get_order_payments = lambda o: [{
+            "cf_payment_id": 4444, "payment_status": "PENDING",
+            "payment_time": "2026-08-20T10:06:00Z",
+        }]
+        _assert(orders.sync_from_cashfree(oid3)["status"] == "pending",
+                "an in-flight attempt still reports 'pending'")
+
+        # Nobody has tried yet -> pending, not failed.
+        oid4 = _order()
+        cashfree.get_order_payments = lambda o: []
+        _assert(orders.sync_from_cashfree(oid4)["status"] == "pending",
+                "no attempts yet reports 'pending'")
+
+        # A retry that succeeds must win over the earlier failure.
+        oid5 = _order()
+        cashfree.get_order_payments = lambda o: [
+            {"cf_payment_id": 1, "payment_status": "FAILED",
+             "payment_time": "2026-08-20T10:00:00Z"},
+            {"cf_payment_id": 2, "payment_status": "SUCCESS",
+             "payment_time": "2026-08-20T10:01:00Z"},
+        ]
+        _assert(orders.sync_from_cashfree(oid5)["status"] == "pending",
+                "a later SUCCESS is not reported as failed")
+    finally:
+        cashfree.get_order, cashfree.get_order_payments = real_order, real_pay
+    return uid
+
+
 def main() -> None:
     print("Billing verification — real Postgres, stubbed gateway")
     print(f"DB: {config.DATABASE_URL.split('@')[-1]}")
@@ -449,6 +532,7 @@ def main() -> None:
         created.append(check_failure_recording())
         created.append(check_refund_clawback())
         created.append(check_refund_after_spend())
+        created.append(check_failed_attempt_reporting())
     finally:
         _cleanup(created)
         print(f"\n(cleaned up {len(created)} test users)")

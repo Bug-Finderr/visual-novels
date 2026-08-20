@@ -45,8 +45,27 @@ export default function PaymentReturn() {
           });
           return;
         }
-        if (['expired', 'terminated'].includes(result.status)) {
-          setState({ phase: 'failed', message: 'That payment didn\'t go through.' });
+        // 'failed'  = the bank declined it
+        // 'abandoned' = closed the checkout without finishing
+        // 'expired' = the order timed out before being paid
+        // Each is terminal: stop polling and say so, rather than leaving
+        // someone watching a spinner for a payment that already ended.
+        if (result.status === 'failed' || result.status === 'expired') {
+          setState({
+            phase: 'failed',
+            message: result.reason
+              ? `That payment didn't go through — ${result.reason}`
+              : 'That payment didn\'t go through.',
+            retry: true,
+          });
+          return;
+        }
+        if (result.status === 'abandoned') {
+          setState({
+            phase: 'failed',
+            message: 'The payment was cancelled before it finished. Nothing was charged.',
+            retry: true,
+          });
           return;
         }
 
@@ -111,9 +130,17 @@ export default function PaymentReturn() {
 
         {phase !== 'checking' && phase !== 'paid' && (
           <>
+            {phase === 'failed' && (
+              <div className="banner" style={{ marginBottom: '1rem' }}>
+                <span className="badge badge-error">not charged</span>
+                No credits were added and no money was taken.
+              </div>
+            )}
             <p>{state.message}</p>
             <div className="form-actions" style={{ justifyContent: 'center' }}>
-              <Link to="/billing" className="btn">Back to credits</Link>
+              {state.retry
+                ? <Link to="/billing" className="btn btn-primary">Try again</Link>
+                : <Link to="/billing" className="btn">Back to credits</Link>}
             </div>
           </>
         )}

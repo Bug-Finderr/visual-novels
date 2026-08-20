@@ -286,6 +286,58 @@ def apply_refund(payload: dict, raw: str) -> dict:
             "balance": balance}
 
 
+def _describe_attempts(order_id: str, local: dict, raw: str) -> dict:
+    """Turn the order's payment attempts into something the UI can say out loud.
+
+    Returns one of: 'pending' (nothing tried yet, or still in flight),
+    'failed' (declined), 'abandoned' (walked away mid-checkout). The reason
+    is carried through so the customer sees 'card declined' rather than a
+    spinner that never resolves.
+    """
+    try:
+        payments = cashfree.get_order_payments(order_id)
+    except cashfree.CashfreeError as err:
+        logger.warning("billing: could not read attempts for %s: %s", order_id, err)
+        return {"credited": False, "status": "pending", "credits": local["credits"]}
+
+    attempt = cashfree.latest_attempt(payments)
+    if not attempt:
+        # Nobody has tried to pay yet — the customer may still be on the
+        # checkout page, or closed it without entering anything.
+        return {"credited": False, "status": "pending", "credits": local["credits"]}
+
+    attempt_status = (attempt.get("payment_status") or "").upper()
+    if attempt_status in cashfree.ATTEMPT_PENDING or attempt_status == "SUCCESS":
+        # SUCCESS here with a non-PAID order means Cashfree hasn't settled it
+        # yet; the webhook or a later verify will pick it up.
+        return {"credited": False, "status": "pending", "credits": local["credits"]}
+
+    err = attempt.get("error_details") or {}
+    reason = (err.get("error_description") or err.get("error_reason")
+              or attempt.get("payment_message"))
+    dropped = attempt_status in cashfree.ATTEMPT_DROPPED
+
+    with db() as conn:
+        conn.execute(
+            "UPDATE payment_orders SET status = ?, failure_code = ?, failure_reason = ?,"
+            " failure_description = ?, cf_payment_id = COALESCE(?, cf_payment_id),"
+            " raw_status_payload = ?, updated_at = CURRENT_TIMESTAMP"
+            " WHERE order_id = ? AND credited_at IS NULL",
+            ("abandoned" if dropped else "failed", err.get("error_code"),
+             err.get("error_reason"), reason,
+             str(attempt.get("cf_payment_id") or "") or None, raw, order_id),
+        )
+
+    logger.info("billing: order %s attempt %s (%s)", order_id, attempt_status,
+                reason or "no reason given")
+    return {
+        "credited": False,
+        "status": "abandoned" if dropped else "failed",
+        "reason": reason,
+        "credits": local["credits"],
+    }
+
+
 def sync_from_cashfree(order_id: str) -> dict:
     """Re-read the order from Cashfree and settle it if genuinely paid.
 
@@ -307,8 +359,13 @@ def sync_from_cashfree(order_id: str) -> dict:
     if status != cashfree.PAID:
         if status in cashfree.FAILED_STATES:
             mark_failed(order_id, "expired" if status == "EXPIRED" else "failed", raw)
-        return {"credited": False, "status": status.lower() or "pending",
-                "credits": local["credits"]}
+            return {"credited": False, "status": "expired" if status == "EXPIRED" else "failed",
+                    "credits": local["credits"]}
+        # Order still ACTIVE. That does NOT mean "still processing" — a
+        # declined or abandoned attempt leaves the order open for a retry. Ask
+        # about the attempts themselves, so the customer gets told what
+        # actually happened instead of an indefinite "confirming...".
+        return _describe_attempts(order_id, local, raw)
 
     paid_paise = round(float(remote.get("order_amount") or 0) * 100)
     if paid_paise != int(local["amount_paise"]):
