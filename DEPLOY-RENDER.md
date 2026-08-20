@@ -135,7 +135,7 @@ Production keys are only issued after KYC. Have ready:
 
 Activation also requires these pages live on the site — they ship in this repo, so just confirm they load: [`/legal/terms`](https://storyplex.app/legal/terms), [`/legal/privacy`](https://storyplex.app/legal/privacy), [`/legal/refunds`](https://storyplex.app/legal/refunds), [`/legal/contact`](https://storyplex.app/legal/contact), and visible pricing at [`/billing`](https://storyplex.app/billing). Cashfree can **deactivate an already-live account** if these later go missing.
 
-> Update `CONTACT_EMAIL` in `client/src/pages/legal/Legal.jsx` to an address you actually monitor before submitting for review — it's `support@storyplex.app` right now, and Cashfree does check that support contacts work.
+> The support address on the policy pages is `CONTACT_EMAIL` in `client/src/pages/legal/Legal.jsx` — currently `suryansh.shakya@hawkslab.org`, which resolves (hawkslab.org has Zoho MX records). If you ever move it to `support@storyplex.app`, add MX records at GoDaddy **first**: the refund policy commits to answering within 3 working days, and Cashfree verifies that support contacts actually work.
 
 Once approved: swap `CASHFREE_APP_ID`/`CASHFREE_SECRET_KEY` for the production pair, set `CASHFREE_ENV=production`, and re-register the webhook on the production dashboard (sandbox and production keep separate webhook config).
 
