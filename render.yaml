@@ -1,9 +1,10 @@
 # Render Blueprint for the full StoryPlex stack: backend + Postgres + the SPA.
 # Apply via Render dashboard: New + -> Blueprint -> select this repo.
-# See DEPLOY-RENDER.md for the full walkthrough (secrets, Google OAuth client
-# update). Everything below is self-referencing (fixed service names ->
-# predictable URLs), so a single Apply wires the two services together with
-# no manual URL-copying step — see the note on service names below.
+# See DEPLOY-RENDER.md for the full walkthrough (secrets, GCS service account,
+# GoDaddy DNS for storyplex.app, Google OAuth client update). URLs below are
+# the final custom domains (storyplex.app / api.storyplex.app), fully wired
+# to each other already — but those domains stay unverified/pending in Render
+# until the GoDaddy DNS records in DEPLOY-RENDER.md step 3 exist.
 #
 # Free Postgres expires 30 days after creation — fine for a same-day demo;
 # switch `plan: free` below to `basic-256mb` ($6/mo) before then if this
@@ -23,6 +24,8 @@ services:
     plan: standard
     region: oregon
     healthCheckPath: /api/v1/health
+    domains:
+      - api.storyplex.app
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -41,24 +44,19 @@ services:
         value: /etc/secrets/gcs-key.json
       - key: STORYGEN_ENGINE
         value: graph
-      # storyplex-web and storyplex-api are different *.onrender.com hosts,
-      # so the session cookie needs cross-site settings. Switch to `lax` +
-      # drop Secure only if you later put both behind one custom domain
-      # (see DEPLOY-RENDER.md) — they'd then share a registrable domain.
+      # storyplex.app / api.storyplex.app share one registrable domain, so
+      # the session cookie can be same-site — Lax + Secure, no reliance on
+      # third-party cookies (which Safari blocks and Chrome is phasing out).
       - key: SESSION_COOKIE_SECURE
         value: "1"
       - key: SESSION_COOKIE_SAMESITE
-        value: none
+        value: lax
       - key: SESSION_SECRET
         generateValue: true
-      # Predictable from the two fixed service names below (Render service
-      # names are globally unique, so a name collision gets Render to append
-      # a suffix — if that happens, fix these three cross-referencing URLs
-      # by hand in the dashboard after the first deploy).
       - key: GOOGLE_REDIRECT_URI
-        value: https://storyplex-api.onrender.com/api/v1/auth/google/callback
+        value: https://api.storyplex.app/api/v1/auth/google/callback
       - key: ALLOWED_ORIGINS
-        value: https://storyplex-web.onrender.com
+        value: https://storyplex.app
       # Secrets — entered once in the Render dashboard during blueprint setup,
       # never committed to the repo.
       - key: GEMINI_API_KEY
@@ -79,9 +77,11 @@ services:
     runtime: static
     buildCommand: npm install && npm run build
     staticPublishPath: client/dist
+    domains:
+      - storyplex.app
     envVars:
       - key: VITE_API_BASE
-        value: https://storyplex-api.onrender.com/api/v1
+        value: https://api.storyplex.app/api/v1
       - key: VITE_ASSET_BASE
         value: https://storage.googleapis.com/storyplex-assets
     routes:

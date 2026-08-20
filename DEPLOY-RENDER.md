@@ -60,13 +60,9 @@ The repo root has a `render.yaml` that provisions the Postgres DB, the backend w
    - `SILK_API_KEY`
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
-5. Click **Apply**. Render provisions Postgres, builds+deploys the backend container (runs `alembic upgrade head` then starts `uvicorn`), and builds+deploys the static site (`npm install && npm run build` → publishes `client/dist`).
+5. Click **Apply**. Render provisions Postgres, builds+deploys the backend container (runs `alembic upgrade head` then starts `uvicorn`), and builds+deploys the static site (`npm install && npm run build` → publishes `client/dist`). Because `render.yaml` declares `domains:` on both services, Render will also register `storyplex.app` and `api.storyplex.app` against each — but they stay in an unverified/pending state until the DNS records in step 3 exist.
 6. Add the Secret File from step 1.4 if you haven't already — `GOOGLE_APPLICATION_CREDENTIALS` won't resolve to anything until that file exists, and asset uploads will fail (story generation will still complete, but sprites/backgrounds/audio won't save).
-7. Once both are live:
-   - API: `https://storyplex-api.onrender.com`
-   - App: `https://storyplex-web.onrender.com`
-
-   (Render service names are globally unique — if either name was already taken by someone else, Render appends a suffix. If that happens, the blueprint's cross-referencing env vars — `GOOGLE_REDIRECT_URI`, `ALLOWED_ORIGINS` on the API; `VITE_API_BASE`, `VITE_ASSET_BASE` on the web service — won't match reality. Fix those three by hand in each service's Environment tab, which triggers a redeploy.)
+7. Each service also keeps its default `*.onrender.com` URL live (`storyplex-api.onrender.com`, `storyplex-web.onrender.com`) — useful for testing before DNS/custom domains are verified.
 
 **Why Standard plan for the backend, not free/Starter:** Render's free tier sleeps after 15 min idle, which would kill an in-progress generation (it's a detached background task tied to that one instance). Standard (2GB) gives real headroom beyond the app's ~115MB import baseline — sprite background removal is a plain numpy/PIL color-key with no ML model, so it's cheap even under full concurrency (profiled: a complete story's image load peaks around 570MB). $25/mo, cancel/downgrade after the demo if you don't need it running. The static site costs nothing regardless of which backend plan you pick.
 
@@ -74,35 +70,47 @@ The repo root has a `render.yaml` that provisions the Postgres DB, the backend w
 
 ---
 
-## 3. Google OAuth client
+## 3. Point `storyplex.app` (GoDaddy) at Render
 
-In Google Cloud Console → **APIs & Services → Credentials → your OAuth client**, add:
+Domain is registered at GoDaddy. Two records needed — one for the apex domain (frontend), one for the `api` subdomain (backend):
 
-- **Authorized redirect URI**: `https://storyplex-api.onrender.com/api/v1/auth/google/callback`
-- **Authorized JavaScript origins**: `https://storyplex-web.onrender.com` and `https://storyplex-api.onrender.com`
-
-(Use the actual URLs from step 2.7 if either got a name-collision suffix.)
+1. Render dashboard → `storyplex-web` → **Settings → Custom Domains** → find `storyplex.app` (already listed as pending from the Blueprint's `domains:` field, or add it if using the manual path) → note the record Render wants for the apex — typically an **A record** to a specific IP, since bare `CNAME` isn't valid at a zone apex. Render's UI shows the exact current value; use that over any value written down elsewhere, in case it's changed.
+2. Render dashboard → `storyplex-api` → **Settings → Custom Domains** → `api.storyplex.app` → note the **CNAME** target it wants (subdomains can use CNAME normally).
+3. **GoDaddy** → your domain → **DNS** → **Manage DNS**:
+   - Edit (or add) the record for `@` (GoDaddy's way of saying the apex/root) to the **A record** Render showed you.
+   - Add a new record: Type `CNAME`, Name `api`, Value = the target Render showed you.
+   - Delete any existing `AAAA` records on either — Render uses IPv4, and leftover AAAA records are a common source of verification failures.
+4. Back in Render, click **Verify** on each domain once DNS propagates (GoDaddy's default TTL is often ~1hr, but changes are frequently visible in minutes — Render's verify button just tells you if it isn't ready yet, safe to retry). TLS certificates are issued and renewed automatically once verified.
 
 ---
 
-## 4. Post-deploy smoke test
+## 4. Google OAuth client
+
+In Google Cloud Console → **APIs & Services → Credentials → your OAuth client**, add:
+
+- **Authorized redirect URI**: `https://api.storyplex.app/api/v1/auth/google/callback`
+- **Authorized JavaScript origins**: `https://storyplex.app` and `https://api.storyplex.app`
+
+---
+
+## 5. Post-deploy smoke test
 
 ```bash
-curl -s https://storyplex-api.onrender.com/api/v1/health
+curl -s https://api.storyplex.app/api/v1/health
 # {"status":"ok","name":"storyplex-server"}
-curl -s https://storyplex-api.onrender.com/api/v1/me
+curl -s https://api.storyplex.app/api/v1/me
 # {"user":null,"googleAuthEnabled":true}
 ```
 
 If `googleAuthEnabled` is `false`, double-check the Google secrets landed in `storyplex-api`'s Environment tab.
 
-Then open `https://storyplex-web.onrender.com`, sign in with Google, create a story, hit Play — scene art/audio load straight from the GCS bucket (`VITE_ASSET_BASE`), TTS streams over `wss://` directly to Render (a static site can't proxy WebSockets any more than Netlify could, which is why `VITE_API_BASE` points at the real backend origin, not a same-origin proxy path). If images 404 or never appear, check `storyplex-api`'s logs for GCS auth errors — usually means the Secret File from step 1.4 is missing or has the wrong path.
+Then open `https://storyplex.app`, sign in with Google, create a story, hit Play — scene art/audio load straight from the GCS bucket (`VITE_ASSET_BASE`), TTS streams over `wss://` directly to the backend (a static site can't proxy WebSockets any more than Netlify could, which is why `VITE_API_BASE` points at the real backend origin, not a same-origin proxy path). If images 404 or never appear, check `storyplex-api`'s logs for GCS auth errors — usually means the Secret File from step 1.4 is missing or has the wrong path.
 
 ---
 
 ## Cookies note
 
-`storyplex-web.onrender.com` and `storyplex-api.onrender.com` are different hosts under Render's multi-tenant domain, so the blueprint sets `SESSION_COOKIE_SAMESITE=none` + `SESSION_COOKIE_SECURE=1` — this relies on third-party cookies, which Safari blocks and Chrome is phasing out. Fine for today's demo. If this becomes a real deployment, put both services behind custom subdomains of **one domain you own** (`app.yourdomain.com` / `api.yourdomain.com` — 2 free custom domains are included per Render workspace) and switch to `SESSION_COOKIE_SAMESITE=lax`; same-registrable-domain cookies avoid the third-party-cookie problem entirely.
+`storyplex.app` and `api.storyplex.app` share one registrable domain, so the session cookie is same-site — `SESSION_COOKIE_SAMESITE=lax` + `SESSION_COOKIE_SECURE=1`, no reliance on third-party cookies. (Earlier, before the custom domain was wired up, this ran on the raw `*.onrender.com` URLs for both services, which are different sites from the cookie's perspective — that needed `SameSite=none`, which works but depends on third-party cookies Safari blocks and Chrome is phasing out. If you ever go back to testing on the bare `onrender.com` URLs, switch this back to `none`.)
 
 ---
 
@@ -120,7 +128,7 @@ Then open `https://storyplex-web.onrender.com`, sign in with Google, create a st
    - **Build command**: `npm install && npm run build`
    - **Publish directory**: `client/dist`
    - Env vars: `VITE_API_BASE` (web service URL from step 2 + `/api/v1`) and `VITE_ASSET_BASE` (`https://storage.googleapis.com/storyplex-assets`).
-4. Back in the web service, set `ALLOWED_ORIGINS` to the static site's URL from step 3, and `GOOGLE_REDIRECT_URI` to its own `/api/v1/auth/google/callback` — then continue from step 1 (GCS bucket + service account) and step 3 (Google OAuth client) above.
+4. Back in the web service, set `ALLOWED_ORIGINS` to the static site's URL from step 3, and `GOOGLE_REDIRECT_URI` to its own `/api/v1/auth/google/callback` — then continue from step 1 (GCS bucket + service account), step 3 (custom domain / GoDaddy DNS), and step 4 (Google OAuth client) above.
 
 ## Local dev vs. this deploy
 
