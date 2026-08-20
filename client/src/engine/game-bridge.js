@@ -23,6 +23,10 @@ const TTS_SAMPLE_RATE = 24000;
 const VOICE_CACHE_MAX = 24;
 // How far ahead to warm the cache while the current line plays.
 const VOICE_PREFETCH = 3;
+// Longest the text will wait for the voice to start. Prefetched lines resolve
+// in ~0ms; this only bites on a cold fetch or when TTS is unavailable, and it
+// exists so reading never stalls behind audio.
+const VOICE_LEAD_MAX_MS = 400;
 
 /**
  * Plays a line's voice, preferring the audio the generation pipeline already
@@ -125,22 +129,26 @@ class VoicePlayer {
     return task;
   }
 
+  /**
+   * Start this line's voice. Resolves once audio is actually SOUNDING (or once
+   * it's clear it won't be), so the caller can let the voice lead the text.
+   */
   async play({ scriptString, text, characterId, expression }) {
     this.stop();
     const gen = this._gen;
 
     // Already decoded: starts this frame, in step with the first character.
     const ready = this._buffers.get(scriptString);
-    if (ready) { this._playBuffer(ready, gen); return; }
+    if (ready) { this._playBuffer(ready, gen); return true; }
 
     if (this._manifest[scriptString]) {
       const buf = await this._load(scriptString);
-      if (gen !== this._gen) return;   // advanced past this line already
-      if (buf) { this._playBuffer(buf, gen); return; }
+      if (gen !== this._gen) return false;   // advanced past this line already
+      if (buf) { this._playBuffer(buf, gen); return true; }
     }
 
-    if (gen !== this._gen) return;
-    this._playStream({ scriptString, text, characterId, expression });
+    if (gen !== this._gen) return false;
+    return this._playStream({ scriptString, text, characterId, expression });
   }
 
   _playBuffer(buffer, gen) {
@@ -156,6 +164,8 @@ class VoicePlayer {
     };
   }
 
+  /** Fallback path. Resolves when the FIRST PCM chunk is queued (i.e. audio is
+   *  about to sound), or when the socket gives up. */
   _playStream({ scriptString, text, characterId, expression }) {
     const url = ttsWsUrl(this.sessionId);
     let ws;
@@ -163,11 +173,15 @@ class VoicePlayer {
       ws = new WebSocket(url);
     } catch (err) {
       console.warn('voice ws open failed:', err);
-      return;
+      return Promise.resolve(false);
     }
     ws.binaryType = 'arraybuffer';
     this._ws = ws;
     this._nextStart = this.ctx.currentTime;
+
+    let settle;
+    const sounding = new Promise((r) => { settle = r; });
+    const done = (v) => { if (settle) { settle(v); settle = null; } };
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ scriptString, text, characterId, expression }));
@@ -178,6 +192,7 @@ class VoicePlayer {
           const obj = JSON.parse(evt.data);
           if (obj.type === 'done') {
             if (this._onDone) this._onDone();
+            done(true);
             // Server already closes from its side, but close eagerly here
             // too so the socket is released even if the server flush is
             // delayed. Stops the dialogue path from leaving sockets open
@@ -186,17 +201,21 @@ class VoicePlayer {
           }
           if (obj.type === 'error') {
             console.warn('tts stream error:', obj.message);
+            done(false);
             try { ws.close(); } catch {}
           }
         } catch { /* not JSON */ }
         return;
       }
       this._enqueuePCM(evt.data);
+      done(true);   // first chunk queued — audio is sounding
     };
-    ws.onerror = (e) => console.debug('voice ws transport error', e);
+    ws.onerror = (e) => { console.debug('voice ws transport error', e); done(false); };
     ws.onclose = () => {
       if (this._ws === ws) this._ws = null;
+      done(false);  // no-op if already settled
     };
+    return sounding;
   }
 
   _enqueuePCM(arrayBuffer) {
@@ -248,6 +267,9 @@ class GameBridge {
     this.currentSpeakerId = null;
 
     this._typewriterGen = 0;
+    // Bumped per displayed line; lets the voice-lead await bail out if the
+    // player has already moved on.
+    this._lineGen = 0;
     this._isTyping = false;
     this._pendingText = '';
     this._currentSceneId = null;
@@ -478,7 +500,7 @@ class GameBridge {
     this._streamer.prefetch(upcoming);
   }
 
-  _playVoiceFor(scriptString) {
+  async _playVoiceFor(scriptString) {
     this._stopVoice();
     if (!this._ensureStreamer()) return;
 
@@ -490,10 +512,17 @@ class GameBridge {
     const expression = m ? m[2] : null;
     const text = m ? m[3] : scriptString;
 
-    this._streamer.play({ scriptString, text, characterId, expression });
+    const started = this._streamer.play({ scriptString, text, characterId, expression });
     this._startLipSync();
     // Warm what's next while this line is speaking.
     this._prefetchUpcomingVoices();
+
+    // Let the voice get out in front of the text, but never wait long: past
+    // the cap the caller proceeds and the audio catches up on its own.
+    await Promise.race([
+      started,
+      new Promise((r) => setTimeout(r, VOICE_LEAD_MAX_MS)),
+    ]);
   }
 
   executeNext() {
@@ -682,7 +711,6 @@ class GameBridge {
   _showDialogue(stmt) {
     const dialogueMatch = stmt.match(/^(\w+):(\w+)\s+(.+)$/);
     this.dialogueBox.style.display = 'block';
-    this.dialogueBox.classList.add('dialogue-active');
     this.interactionPanel.style.display = 'none';
 
     if (dialogueMatch) {
@@ -711,14 +739,35 @@ class GameBridge {
       const sprite = this.sprites[charId];
       if (sprite) sprite.setExpression(expression);
 
-      this._playVoiceFor(stmt);
-      this._typeText(text, /* speaker */ charId);
+      this._speakThenType(stmt, text, charId);
     } else {
       this.speakerEl.style.display = 'none';
       this._setActiveSpeaker(null);
-      this._playVoiceFor(stmt);
-      this._typeText(stmt, null);
+      this._speakThenType(stmt, stmt, null);
     }
+  }
+
+  /**
+   * Voice first, then the dialogue box transition and the typewriter.
+   *
+   * The line's audio is started (and awaited only until it is actually
+   * sounding) before the box slides in, so the voice leads the text rather
+   * than trailing it. With the next lines prefetched this wait is typically
+   * zero, and it is capped so a cold fetch or a dead TTS backend can never
+   * stall reading — past the cap the text simply begins and the voice joins
+   * when it arrives.
+   */
+  async _speakThenType(scriptString, text, charId) {
+    const gen = ++this._lineGen;
+    // Hold off advancing during the lead so a click can't land between the
+    // voice starting and the text existing.
+    this.isWaiting = true;
+
+    await this._playVoiceFor(scriptString);
+    if (gen !== this._lineGen) return;   // player advanced during the lead
+
+    this.dialogueBox.classList.add('dialogue-active');
+    this._typeText(text, charId);        // clears isWaiting
   }
 
   _setActiveSpeaker(charId) {
