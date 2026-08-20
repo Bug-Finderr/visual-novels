@@ -44,6 +44,13 @@ services:
         value: /etc/secrets/gcs-key.json
       - key: STORYGEN_ENGINE
         value: graph
+      # Concurrent story generations; the rest QUEUE rather than pile on.
+      # A pipeline peaks near 500MB against this 2GB Standard instance
+      # (~130MB baseline), so 3 leaves headroom and 4-5 is the hard ceiling.
+      # An OOM is not a polite failure — it kills every in-flight generation
+      # AND the web service. Only raise this alongside a bigger plan.
+      - key: MAX_CONCURRENT_GENERATIONS
+        value: "3"
       # storyplex.app / api.storyplex.app share one registrable domain, so
       # the session cookie can be same-site — Lax + Secure, no reliance on
       # third-party cookies (which Safari blocks and Chrome is phasing out).

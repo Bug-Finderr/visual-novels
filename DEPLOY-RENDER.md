@@ -198,6 +198,21 @@ then re-run the user's verify from the billing page, or POST the order id back t
 
 ---
 
+## 7. Capacity
+
+One Standard instance (2 GB RAM, 1 CPU) comfortably serves **several hundred concurrent readers** — playing a story is cached dialogue plus assets served straight from GCS, never through this server.
+
+**Generation is the scarce resource.** A pipeline peaks near 500 MB resident against a ~130 MB baseline, so `MAX_CONCURRENT_GENERATIONS=3` leaves real headroom; 4–5 is the hard ceiling. Beyond the limit, generations **queue** and the player is shown their position — before this existed, the 4th simultaneous generation OOM'd the instance and killed every other in-flight story with it.
+
+```bash
+# What the queue is doing right now (from the logs)
+#   "generation queued: session=… position=2 (active=3)"
+```
+
+Raising the limit needs a bigger plan, not just a bigger number — Pro ($85/mo, 4 GB, 2 CPU) supports roughly 8. Watch for `generation queued` lines appearing routinely: that's the signal to scale up, and it's a much better signal than a crash.
+
+---
+
 ## Cookies note
 
 `storyplex.app` and `api.storyplex.app` share one registrable domain, so the session cookie is same-site — `SESSION_COOKIE_SAMESITE=lax` + `SESSION_COOKIE_SECURE=1`, no reliance on third-party cookies. (Earlier, before the custom domain was wired up, this ran on the raw `*.onrender.com` URLs for both services, which are different sites from the cookie's perspective — that needed `SameSite=none`, which works but depends on third-party cookies Safari blocks and Chrome is phasing out. If you ever go back to testing on the bare `onrender.com` URLs, switch this back to `none`.)

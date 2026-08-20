@@ -63,6 +63,12 @@ class Config(BaseSettings):
     STORYGEN_ENGINE: str = "monolith"
     # Max Memory-gate revision loops before the graph accepts best-effort.
     STORYGRAPH_MAX_REVISIONS: int = 2
+    # How many story generations may run at once. Beyond this they QUEUE.
+    # Sizing: a pipeline peaks near 500MB resident against a 2GB Render
+    # Standard instance with a ~130MB baseline, so 3 leaves real headroom and
+    # 4-5 is the hard ceiling. Raise it only with the RAM to back it — an OOM
+    # kills every in-flight generation and the web service with it.
+    MAX_CONCURRENT_GENERATIONS: int = 3
     # Optional LLM semantic critic in the Memory gate (structural checks always
     # run). Off by default to keep generation deterministic and fast.
     STORYGRAPH_LLM_CRITIC: bool = False

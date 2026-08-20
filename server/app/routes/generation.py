@@ -36,9 +36,58 @@ _progress: dict[str, dict] = {}
 # total, so back to the original value.)
 _PIPELINE_WORKERS = 6
 
+# ---------------------------------------------------------------------------
+# Admission control.
+#
+# A pipeline peaks around 500MB resident (measured: 13 sprite tasks at 6-way
+# concurrency), against a 2GB instance with a ~130MB baseline. That is roughly
+# 4 in flight before the box dies — and an OOM does not fail politely, it kills
+# EVERY generation running plus the whole web service.
+#
+# So starts are gated on a semaphore rather than fired straight at the loop.
+# Over the limit, a generation WAITS instead of taking the instance down with
+# it, and the player is told their place in the queue rather than staring at a
+# progress bar that isn't moving.
+# ---------------------------------------------------------------------------
+_slots: asyncio.Semaphore | None = None
+_waiting: list[str] = []   # session ids awaiting a slot, in arrival order
+_active: set[str] = set()  # session ids currently holding one
+
+
+def _get_slots() -> asyncio.Semaphore:
+    """Created lazily so the semaphore binds to the running event loop."""
+    global _slots
+    if _slots is None:
+        _slots = asyncio.Semaphore(max(1, int(config.MAX_CONCURRENT_GENERATIONS)))
+    return _slots
+
 
 def _set_progress(session_id: str, **payload) -> None:
     _progress[session_id] = payload
+
+
+def _publish_queue_positions() -> None:
+    """Refresh every waiting session's progress with its current position, so
+    the SSE stream tells each player how many are ahead of them."""
+    for position, sid in enumerate(_waiting, start=1):
+        ahead = position - 1
+        _set_progress(
+            sid,
+            step="queued",
+            progress=0,
+            details=(
+                "Waiting for a free slot — you're next in line."
+                if ahead == 0 else
+                f"Waiting for a free slot — {ahead} {'story' if ahead == 1 else 'stories'} ahead of you."
+            ),
+            queuePosition=position,
+            queueLength=len(_waiting),
+        )
+
+
+def queue_snapshot() -> dict:
+    return {"active": len(_active), "waiting": len(_waiting),
+            "limit": max(1, int(config.MAX_CONCURRENT_GENERATIONS))}
 
 
 def _build_continuation_context(session: dict) -> dict | None:
@@ -418,9 +467,37 @@ def _run_pipeline(session_id: str, session: dict) -> None:
 
 async def _pipeline_runner(session_id: str, session: dict, user_id: str | None = None) -> None:
     try:
-        await asyncio.to_thread(_run_pipeline, session_id, session)
+        slots = _get_slots()
+        # Announce the wait BEFORE blocking on the semaphore, otherwise a
+        # queued player sees "Starting generation..." frozen at 0% with no
+        # explanation of why nothing is happening.
+        if slots.locked():
+            _waiting.append(session_id)
+            _publish_queue_positions()
+            logger.info("generation queued: session=%s position=%d (active=%d)",
+                        session_id, len(_waiting), len(_active))
+
+        async with slots:
+            if session_id in _waiting:
+                _waiting.remove(session_id)
+                _publish_queue_positions()   # everyone behind moves up one
+            _active.add(session_id)
+            _set_progress(session_id, step="starting", progress=0,
+                          details="Starting generation...")
+            try:
+                await asyncio.to_thread(_run_pipeline, session_id, session)
+            finally:
+                _active.discard(session_id)
+                _publish_queue_positions()
     except Exception as err:
         logger.exception("Generation pipeline failed: %s", err)
+        # Belt and braces: the inner `finally` clears these on the normal path,
+        # but a failure before/inside the acquire must not leak a slot or leave
+        # a ghost entry inflating everyone else's queue position.
+        _active.discard(session_id)
+        if session_id in _waiting:
+            _waiting.remove(session_id)
+        _publish_queue_positions()
         session_service.update_status(session_id, "error")
         _set_progress(session_id, step="error", progress=0, details=str(err))
         # Off by default — each attempt is charged, including retries after a
@@ -514,7 +591,10 @@ async def stream_progress(session_id: str, request: Request, _s: dict = Depends(
             return
 
         last_payload: str | None = None
-        max_iters = 15 * 60 * 2  # 0.5s per iter
+        # 45 min at 0.5s per iter. Generation itself runs ~10-15 min, but a
+        # queued session legitimately waits behind others now, so the old
+        # 15-minute cap would have hung up on players who were simply in line.
+        max_iters = 45 * 60 * 2
         for _ in range(max_iters):
             if await request.is_disconnected():
                 break
