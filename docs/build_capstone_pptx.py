@@ -86,7 +86,7 @@ def place(slide, path, left, top, box_w, box_h, label=None):
     """Drop an image centred in a box. If it's missing, draw a labelled
     placeholder instead so the slot is visible rather than silently empty."""
     from PIL import Image
-    if path and Path(path).exists():
+    if path is not None and Path(path).exists():
         with Image.open(path) as im:
             w, h = im.size
         dw, dh = fit(w, h, box_w, box_h)
@@ -137,27 +137,66 @@ def caption(slide, text, left, top, width, size=11):
     return tb
 
 
+# Screenshot slots and the keywords that identify each. Matching runs on a
+# normalised stem (lowercased, non-alphanumerics stripped) across any image
+# extension, so "loading screen.jpeg", "03-loading.png" and "Loading.PNG" all
+# resolve. Captures should not have to be renamed to satisfy a build script.
+SLOTS = {
+    "01-landing.png":     ["landing", "home"],
+    "02-create-form.png": ["createform", "create", "setup", "newtale"],
+    "03-loading.png":     ["loadingscreen", "loading", "generating", "progress"],
+    "04-credits.png":     ["storycredits", "credits", "billing"],
+    "05-reader.png":      ["reader", "gameplay", "game", "play"],
+    "06-choices.png":     ["branching", "choices", "choice"],
+    "07-explore.png":     ["explore", "gallery", "feed"],
+    "08-library.png":     ["library", "storypage", "storydetail"],
+}
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def _norm(name):
+    return "".join(c for c in name.lower() if c.isalnum())
+
+
+def shot(slot):
+    """Resolve a slot to a file on disk, or None if nothing matches.
+
+    Longest matching keyword wins, so a specific term ("storypage") beats a
+    broad one and two slots cannot claim the same file.
+    """
+    if not SHOTS.exists():
+        return None
+    files = [f for f in SHOTS.iterdir() if f.suffix.lower() in IMAGE_EXT]
+
+    # An exact slot filename wins outright. This is how a cleaned-up or cropped
+    # version overrides the original capture: save it as the slot name and it
+    # takes precedence over any keyword match.
+    for f in files:
+        if f.name == slot:
+            return f
+
+    best, best_len = None, 0
+    for kw in SLOTS.get(slot, []):
+        for f in files:
+            if kw in _norm(f.stem) and len(kw) > best_len:
+                best, best_len = f, len(kw)
+    return best
+
+
+def caption(slide, text, left, top, width, size=11):
+    tb = slide.shapes.add_textbox(Emu(int(left)), Emu(int(top)), Emu(int(width)), Inches(0.3))
+    tf = tb.text_frame; tf.text = text
+    for p in tf.paragraphs:
+        p.alignment = PP_ALIGN.CENTER
+        for r in p.runs:
+            r.font.size = Pt(size); r.font.bold = True; r.font.color.rgb = INK
+    return tb
+
+
 # Accept several spellings per slot, so screenshots don't have to be renamed to
 # match. First existing match wins; order is preference order.
-ALIASES = {
-    "01-landing.png":     ["01-landing.png", "landing.png", "home.png"],
-    "02-create-form.png": ["02-create-form.png", "create_form.png", "create-form.png", "create.png"],
-    "03-loading.png":     ["03-loading.png", "loading.png", "generating.png", "progress.png"],
-    "04-credits.png":     ["04-credits.png", "credits.png", "billing.png"],
-    "05-reader.png":      ["05-reader.png", "reader.png", "game.png", "play.png"],
-    "06-choices.png":     ["06-choices.png", "choices.png", "choice.png"],
-    "07-explore.png":     ["07-explore.png", "explore.png", "feed.png"],
-    # No library shot supplied; the story detail page fills the slot well.
-    "08-library.png":     ["08-library.png", "library.png", "story_page.png", "story-page.png"],
-}
 
 
-def shot(name):
-    for candidate in ALIASES.get(name, [name]):
-        p = SHOTS / candidate
-        if p.exists():
-            return p
-    return SHOTS / name
 
 
 # ---------------------------------------------------------------- content
@@ -314,8 +353,9 @@ def build():
     for i, (fn, cap) in enumerate(grid8):
         cx = Inches(0.3) + (i % 2) * (cw + Inches(0.3))
         cy = Inches(0.35) + (i // 2) * (ch + Inches(0.5))
-        rect = place(S[7], shot(fn), cx, cy, cw, ch - Inches(0.30), cap)
-        if not Path(str(shot(fn))).exists():
+        src = shot(fn)
+        rect = place(S[7], src, cx, cy, cw, ch - Inches(0.30), cap)
+        if src is None:
             missing.append(fn)
         caption(S[7], cap, cx, rect[1] + rect[3] + Inches(0.04), cw)
 
@@ -326,15 +366,20 @@ def build():
         ("05-reader.png", "Playing a generated story"),
         ("06-choices.png", "Branching choices"),
         ("07-explore.png", "Explore — published stories"),
-        ("08-library.png", "Story page — ratings and comments"),
+        ("08-library.png", None),   # labelled from whatever resolves
     ]
     gw = (W - Inches(0.9)) / 2
     gh = (H - Inches(1.35)) / 2
     for i, (fn, cap) in enumerate(grid9):
+        if cap is None:
+            f = shot(fn)
+            cap = ("Library — your stories" if f and "librar" in _norm(f.stem)
+                   else "Story page — ratings and comments")
         cx = Inches(0.3) + (i % 2) * (gw + Inches(0.3))
         cy = Inches(0.72) + (i // 2) * (gh + Inches(0.18))
-        rect = place(S[8], shot(fn), cx, cy, gw, gh - Inches(0.30), cap)
-        if not Path(str(shot(fn))).exists():
+        src = shot(fn)
+        rect = place(S[8], src, cx, cy, gw, gh - Inches(0.30), cap)
+        if src is None:
             missing.append(fn)
         caption(S[8], cap, cx, rect[1] + rect[3] + Inches(0.04), gw, size=11)
 
