@@ -21,6 +21,7 @@ DOCS = Path(__file__).resolve().parent
 TEMPLATE = DOCS / "final_capstone (1).pptx"
 SHOTS = DOCS / "screenshots"
 CHARTS = DOCS / "charts"
+CACHE = DOCS / "output" / ".img-cache"
 OUT = DOCS / "output" / "StoryPlex_Capstone.pptx"
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
@@ -89,14 +90,31 @@ def place(slide, path, left, top, box_w, box_h, label=None):
         with Image.open(path) as im:
             w, h = im.size
         dw, dh = fit(w, h, box_w, box_h)
-        slide.shapes.add_picture(
-            str(path),
-            Emu(int(left + (box_w - dw) / 2)), Emu(int(top + (box_h - dh) / 2)),
-            Emu(int(dw)), Emu(int(dh)),
-        )
-        return True
 
-    box = slide.shapes.add_textbox(Emu(int(left)), Emu(int(top)), Emu(int(box_w)), Emu(int(box_h)))
+        # Retina captures are ~3400px wide; a 10in slide never needs more than
+        # ~200 DPI. Downscale into a cache so the deck stays a sane size —
+        # 26 MB of source PNGs becomes a few MB with no visible loss.
+        target_px = int(dw / 914400 * 200)
+        src = Path(path)
+        if w > target_px * 1.15:
+            CACHE.mkdir(exist_ok=True)
+            cached = CACHE / f"{src.stem}@{target_px}.png"
+            if not cached.exists():
+                with Image.open(src) as im:
+                    im.convert("RGB").resize(
+                        (target_px, int(h * target_px / w)), Image.LANCZOS
+                    ).save(cached, "PNG", optimize=True)
+            src = cached
+
+        px, py = int(left + (box_w - dw) / 2), int(top + (box_h - dh) / 2)
+        slide.shapes.add_picture(str(src), Emu(px), Emu(py), Emu(int(dw)), Emu(int(dh)))
+        return (px, py, int(dw), int(dh))
+
+    # Placeholder matches the 16:9 shape of a real capture, so a missing shot
+    # doesn't distort the layout it will eventually occupy.
+    ph_h = min(box_h, box_w * 9 / 16)
+    ph_y = int(top + (box_h - ph_h) / 2)
+    box = slide.shapes.add_textbox(Emu(int(left)), Emu(ph_y), Emu(int(box_w)), Emu(int(ph_h)))
     box.fill.solid(); box.fill.fore_color.rgb = PLACEHOLDER_BG
     box.line.color.rgb = MUTED
     tf = box.text_frame
@@ -106,7 +124,7 @@ def place(slide, path, left, top, box_w, box_h, label=None):
         p.alignment = PP_ALIGN.CENTER
         for r in p.runs:
             r.font.size = Pt(12); r.font.color.rgb = MUTED; r.font.bold = True
-    return False
+    return (int(left), ph_y, int(box_w), int(ph_h))
 
 
 def caption(slide, text, left, top, width, size=11):
@@ -119,7 +137,26 @@ def caption(slide, text, left, top, width, size=11):
     return tb
 
 
+# Accept several spellings per slot, so screenshots don't have to be renamed to
+# match. First existing match wins; order is preference order.
+ALIASES = {
+    "01-landing.png":     ["01-landing.png", "landing.png", "home.png"],
+    "02-create-form.png": ["02-create-form.png", "create_form.png", "create-form.png", "create.png"],
+    "03-loading.png":     ["03-loading.png", "loading.png", "generating.png", "progress.png"],
+    "04-credits.png":     ["04-credits.png", "credits.png", "billing.png"],
+    "05-reader.png":      ["05-reader.png", "reader.png", "game.png", "play.png"],
+    "06-choices.png":     ["06-choices.png", "choices.png", "choice.png"],
+    "07-explore.png":     ["07-explore.png", "explore.png", "feed.png"],
+    # No library shot supplied; the story detail page fills the slot well.
+    "08-library.png":     ["08-library.png", "library.png", "story_page.png", "story-page.png"],
+}
+
+
 def shot(name):
+    for candidate in ALIASES.get(name, [name]):
+        p = SHOTS / candidate
+        if p.exists():
+            return p
     return SHOTS / name
 
 
@@ -277,25 +314,29 @@ def build():
     for i, (fn, cap) in enumerate(grid8):
         cx = Inches(0.3) + (i % 2) * (cw + Inches(0.3))
         cy = Inches(0.35) + (i // 2) * (ch + Inches(0.5))
-        if not place(S[7], shot(fn), cx, cy, cw, ch - Inches(0.28), cap):
+        rect = place(S[7], shot(fn), cx, cy, cw, ch - Inches(0.30), cap)
+        if not Path(str(shot(fn))).exists():
             missing.append(fn)
-        caption(S[7], cap, cx, cy + ch - Inches(0.26), cw)
+        caption(S[7], cap, cx, rect[1] + rect[3] + Inches(0.04), cw)
 
     # ---- 9 demo screenshots ----------------------------------------------
     clear_all(S[8])
-    caption(S[8], "Demo", Inches(0.3), Inches(0.12), W - Inches(0.6), size=17)
-    big_w, big_h = W - Inches(4.4), H - Inches(1.3)
-    if not place(S[8], shot("05-reader.png"), Inches(0.3), Inches(0.72), big_w, big_h, "Reader"):
-        missing.append("05-reader.png")
-    caption(S[8], "Playing a generated story", Inches(0.3), Inches(0.72) + big_h + Inches(0.04), big_w)
-    sx, sw, sh_ = Inches(0.3) + big_w + Inches(0.25), Inches(3.6), Inches(1.85)
-    for i, (fn, cap) in enumerate([("06-choices.png", "Branching choices"),
-                                   ("07-explore.png", "Explore"),
-                                   ("08-library.png", "Library")]):
-        cy = Inches(0.72) + i * (sh_ + Inches(0.32))
-        if not place(S[8], shot(fn), sx, cy, sw, sh_ - Inches(0.02), cap):
+    caption(S[8], "Demo", Inches(0.3), Inches(0.10), W - Inches(0.6), size=17)
+    grid9 = [
+        ("05-reader.png", "Playing a generated story"),
+        ("06-choices.png", "Branching choices"),
+        ("07-explore.png", "Explore — published stories"),
+        ("08-library.png", "Story page — ratings and comments"),
+    ]
+    gw = (W - Inches(0.9)) / 2
+    gh = (H - Inches(1.35)) / 2
+    for i, (fn, cap) in enumerate(grid9):
+        cx = Inches(0.3) + (i % 2) * (gw + Inches(0.3))
+        cy = Inches(0.72) + (i // 2) * (gh + Inches(0.18))
+        rect = place(S[8], shot(fn), cx, cy, gw, gh - Inches(0.30), cap)
+        if not Path(str(shot(fn))).exists():
             missing.append(fn)
-        caption(S[8], cap, sx, cy + sh_, sw, size=10)
+        caption(S[8], cap, cx, rect[1] + rect[3] + Inches(0.04), gw, size=11)
 
     # ---- 10 flow diagram --------------------------------------------------
     clear_all(S[9])
