@@ -1,0 +1,17 @@
+Model check — configured ids, called for real
+
+[story] gemini-3-flash-preview
+  ✓ model is reachable
+  ✓ returns usable output ('{"ok": true}')
+
+[dialogue] gemini-3.1-flash-lite
+  ✓ model is reachable
+  ✓ returns usable output ('{"ok": true}')
+
+[image] gemini-3.1-flash-lite-image
+  ✓ returns image bytes
+  ✓ background is flat enough to key on (border spread 3.2, want <25)
+  ✓ background is in the magenta family (RGB (248, 13, 235))
+  ✓ background removal leaves a plausible sprite (84% transparent)
+
+ALL MODELS OK ✅

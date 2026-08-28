@@ -1,0 +1,210 @@
+
+[1] full graph run (with a forced revision loop)
+  ok: chapter agent ran twice (gate forced a revision)
+  ok: memory_log recorded both gate passes
+  ok: first gate pass rejected
+  ok: second gate pass approved
+  ok: spine has exactly 10 beats
+  ok: exactly 5 chapter endings
+  ok: 5 distinct ending tags
+  ok: beat beat_0 sceneId resolves
+  ok: beat beat_0 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_1 sceneId resolves
+  ok: beat beat_1 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_2 sceneId resolves
+  ok: beat beat_2 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_3 sceneId resolves
+  ok: beat beat_3 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_4 sceneId resolves
+  ok: beat beat_4 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_5 sceneId resolves
+  ok: beat beat_5 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_6 sceneId resolves
+  ok: beat beat_6 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_7 sceneId resolves
+  ok: beat beat_7 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_8 sceneId resolves
+  ok: beat beat_8 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_9 sceneId resolves
+  ok: beat beat_9 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: every ending reachable by some choice
+  ok: ending ending_0 finalSceneId resolves
+  ok: ending ending_1 finalSceneId resolves
+  ok: ending ending_2 finalSceneId resolves
+  ok: ending ending_3 finalSceneId resolves
+  ok: ending ending_4 finalSceneId resolves
+  ok: openingScript present
+  ok: worldLore has a name
+  ok: plot endings stashed on plotArc
+
+[2] build_contract repair on broken state
+  ok: nameless scene backfilled name (NOT NULL invariant)
+  ok: scene description backfilled
+  ok: bad finalSceneId repaired to a real scene
+  ok: empty ending tag repaired
+  ok: missing choices padded to 3
+  ok: ghost sceneId repaired
+  ok: unknown castId dropped
+  ok: empty opening backfilled
+
+[2b] gate routing to 'characters' must not KeyError (blocker #2/#3)
+  ok: gate emitted route='characters' (the crash trigger)
+  ok: graph completed via the 'characters' edge without KeyError
+
+[3] generate_world dispatch routes to the graph engine
+  ok: STORYGEN_ENGINE=graph picked up
+  ok: engine marker tags the graph path (for per-session persistence)
+  ok: spine has exactly 10 beats
+  ok: exactly 5 chapter endings
+  ok: 5 distinct ending tags
+  ok: beat beat_0 sceneId resolves
+  ok: beat beat_0 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_1 sceneId resolves
+  ok: beat beat_1 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_2 sceneId resolves
+  ok: beat beat_2 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_3 sceneId resolves
+  ok: beat beat_3 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_4 sceneId resolves
+  ok: beat beat_4 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_5 sceneId resolves
+  ok: beat beat_5 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_6 sceneId resolves
+  ok: beat beat_6 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_7 sceneId resolves
+  ok: beat beat_7 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_8 sceneId resolves
+  ok: beat beat_8 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: beat beat_9 sceneId resolves
+  ok: beat beat_9 has 3 choices
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: choice tag is a real ending tag
+  ok: castIds resolve
+  ok: every ending reachable by some choice
+  ok: ending ending_0 finalSceneId resolves
+  ok: ending ending_1 finalSceneId resolves
+  ok: ending ending_2 finalSceneId resolves
+  ok: ending ending_3 finalSceneId resolves
+  ok: ending ending_4 finalSceneId resolves
+  ok: openingScript present
+  ok: worldLore has a name
+  ok: plot endings stashed on plotArc
+
+ALL CHECKS PASSED ✅
