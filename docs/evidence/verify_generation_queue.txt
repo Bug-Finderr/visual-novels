@@ -1,0 +1,69 @@
+Generation queue verification — pipeline stubbed, no Gemini spend
+
+[1] admission cap (limit=3)
+  ✓ never exceeded 3 concurrent (peak 3)
+  ✓ and did use the full allowance (peak 3)
+  ✓ all 9 eventually ran — nobody starved
+  ✓ queue and active set drained clean
+
+[2] queue positions reported to the player
+  ✓ 3 sessions reported as queued (got 3)
+  ✓ positions are 1,2,3 with no gaps (got [1, 2, 3])
+  ✓ position 1 is told they're next
+  ✓ position 3 is told 2 are ahead (got: 'Waiting for a free slot — 2 stories ahead of you.')
+  ✓ queued sessions report 0% — the bar is hidden for these anyway
+  ✓ queue drained as slots freed (now 0 waiting)
+  ✓ queue empty at the end
+
+[3] a crashing pipeline releases its slot
+Traceback (most recent call last):
+  File "/Users/nullhawk/Documents/hawks_lab/visual-novels/server/app/routes/generation.py", line 488, in _pipeline_runner
+    await asyncio.to_thread(_run_pipeline, session_id, session)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/Users/nullhawk/Documents/hawks_lab/visual-novels/server/scripts/verify_generation_queue.py", line 53, in run
+    raise RuntimeError("simulated pipeline failure")
+RuntimeError: simulated pipeline failure
+Traceback (most recent call last):
+  File "/Users/nullhawk/Documents/hawks_lab/visual-novels/server/app/routes/generation.py", line 488, in _pipeline_runner
+    await asyncio.to_thread(_run_pipeline, session_id, session)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/Users/nullhawk/Documents/hawks_lab/visual-novels/server/scripts/verify_generation_queue.py", line 53, in run
+    raise RuntimeError("simulated pipeline failure")
+RuntimeError: simulated pipeline failure
+Traceback (most recent call last):
+  File "/Users/nullhawk/Documents/hawks_lab/visual-novels/server/app/routes/generation.py", line 488, in _pipeline_runner
+    await asyncio.to_thread(_run_pipeline, session_id, session)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "/Users/nullhawk/Documents/hawks_lab/visual-novels/server/scripts/verify_generation_queue.py", line 53, in run
+    raise RuntimeError("simulated pipeline failure")
+RuntimeError: simulated pipeline failure
+  ✓ the 3 behind still ran after the first 3 crashed (ran 6)
+  ✓ no slot leaked by the crashes
+  ✓ no ghost entries left inflating positions
+  ✓ crashed sessions are reported as errors to their players
+
+[4] first in, first served
+  ✓ the first 3 submitted ran first (got ['f0', 'f1', 'f2'])
+  ✓ and the queued 3 ran after, not before
+
+  snapshot API: {'active': 0, 'waiting': 0, 'limit': 3}
+
+ALL CHECKS PASSED ✅

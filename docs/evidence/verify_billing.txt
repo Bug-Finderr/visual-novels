@@ -1,0 +1,96 @@
+Billing verification — real Postgres, stubbed gateway
+DB: localhost:5432/storyplex
+
+[1] free signup grant
+  ✓ first touch grants FREE_STORY_CREDITS (2)
+  ✓ grant size is recorded on the account
+  ✓ repeated reads do NOT re-grant
+  ✓ exactly one grant ledger row
+
+[2] balance floor + ledger mirror
+  ✓ spending 1 of 2 leaves 1
+  ✓ overspend is refused (returns None)
+  ✓ refused spend left the balance untouched
+  ✓ ledger has grant + the one accepted spend, not the refusal
+  ✓ newest ledger row carries the running balance
+
+[3] concurrent /generate — exactly one winner
+  ✓ exactly 1 of 8 concurrent calls won (got 1)
+  ✓ exactly one credit was spent
+  ✓ exactly one debit ledger row
+  ✓ session ended up claimed
+
+[4] insufficient credits rolls back the status claim
+  ✓ user starts broke
+  ✓ charge raises when the balance is short
+  ✓ session is still 'created' — the claim rolled back with the debit
+
+[5] webhook signature verification
+  ✓ correct signature verifies
+  ✓ tampered body is rejected
+  ✓ wrong timestamp is rejected
+  ✓ garbage signature is rejected
+  ✓ signature from another secret is rejected
+
+[6] settlement is idempotent (webhook + verify race)
+  ✓ first settle credits
+  ✓ balance rose by the pack's 5 credits
+  ✓ second settle is a no-op
+  ✓ balance did NOT move on the replay
+  ✓ exactly one purchase ledger row
+  ✓ lifetime_purchased counted once
+  ✓ exactly 1 of 6 concurrent settles credited (got 1)
+  ✓ concurrent settles granted 1 credit total
+
+[7] a short payment does not buy a full pack
+  ✓ mismatched amount is not credited
+  ✓ reported as amount_mismatch
+  ✓ balance untouched
+  ✓ order marked failed
+
+[8] failure webhooks record why
+  ✓ bank decline -> status 'failed'
+  ✓ error_reason stored
+  ✓ error_code stored
+  ✓ cf_payment_id captured
+  ✓ user drop -> status 'abandoned'
+  ✓ a failed attempt does NOT unmark an order already paid
+  ✓ and does not scribble a failure on it
+
+[9] refund clawback
+  ✓ grant 2 + purchased 5 = 7
+  ✓ full refund reclaims all 5 credits
+  ✓ balance back to the free grant
+  ✓ order marked refunded
+  ✓ replayed refund webhook reclaims nothing
+  ✓ over-refund past 100% reclaims nothing
+  ✓ balance never goes below what was granted (got 2)
+  ✓ 12 after buying the 10-pack
+  ✓ half refund reclaims 5 of 10 (got 5)
+  ✓ balance reduced by the proportional share
+  ✓ marked partially_refunded
+  ✓ PENDING refund reclaims nothing
+  ✓ balance untouched while refund is pending
+
+[10] refund after the credits were already spent
+  ✓ 5 credits bought
+  ✓ all 5 spent on stories
+  ✓ refund still reclaims 5
+  ✓ balance goes NEGATIVE, not silently absorbed (got -5)
+  ✓ a negative balance blocks new generation
+  ✓ and leaves the session retryable
+  ✓ buying 5 again nets the debt back to zero
+
+[11] a declined payment reports as failed, not 'still confirming'
+  ✓ declined attempt -> status 'failed' (got 'failed')
+  ✓ the decline reason is passed back for the UI to show
+  ✓ order row marked failed
+  ✓ no credits granted
+  ✓ user-dropped -> 'abandoned' (got 'abandoned')
+  ✓ an in-flight attempt still reports 'pending'
+  ✓ no attempts yet reports 'pending'
+  ✓ a later SUCCESS is not reported as failed
+
+(cleaned up 9 test users)
+
+ALL CHECKS PASSED ✅
