@@ -233,9 +233,9 @@ def build():
          "reach of almost everyone who would like to tell a story in it.", 0, False),
         ("Gap in existing systems", 0, True),
         ("Generative AI can now produce prose, illustration and speech individually, but the tools "
-         "remain separate. Assembling them into a playable, internally consistent story — one where "
-         "the same character looks and sounds the same across every scene, and choices actually "
-         "change the outcome — is still manual integration work.", 0, False),
+         "remain separate. Assembling them into a playable, internally consistent story is still manual "
+         "integration work: the same character has to look and sound the same in every scene, "
+         "and choices have to actually change the outcome.", 0, False),
         ("Importance of the problem", 0, True),
         ("A system that takes a premise and returns a complete, playable visual novel collapses "
          "months of multi-disciplinary production into minutes, and makes the medium available to "
@@ -246,19 +246,19 @@ def build():
     set_title(S[2], "Objectives & Scope")
     set_body(S[2], [
         ("Objectives:", 0, True),
-        ("Objective 1 — Generate a complete, internally consistent visual novel from a short user "
+        ("Objective 1: Generate a complete, internally consistent visual novel from a short user "
          "premise: plot, cast, branching script, artwork and voices.", 0, False),
-        ("Objective 2 — Maintain narrative coherence across a 10-beat story spine with five "
+        ("Objective 2: Maintain narrative coherence across a 10-beat story spine with five "
          "distinct endings, where player choices carry weight toward the ending reached.", 0, False),
-        ("Objective 3 — Keep generation economically viable by producing only the assets a story "
+        ("Objective 3: Keep generation economically viable by producing only the assets a story "
          "actually uses, rather than a fixed catalogue.", 0, False),
-        ("Objective 4 — Operate reliably as a deployed, multi-user web service with authentication, "
+        ("Objective 4: Operate reliably as a deployed, multi-user web service with authentication, "
          "prepaid billing, and admission control under constrained memory.", 0, False),
         ("Scope:", 0, True),
-        ("In scope — story/dialogue generation, character sprites and backgrounds, text-to-speech, "
+        ("In scope: story/dialogue generation, character sprites and backgrounds, text-to-speech, "
          "branching gameplay, accounts, publishing and social features, credit-based billing, "
          "production deployment.", 0, False),
-        ("Out of scope — video or animation beyond a 2D sprite rig, multiplayer, user-uploaded "
+        ("Out of scope: video or animation beyond a 2D sprite rig, multiplayer, user-uploaded "
          "artwork, mobile applications, and translation into other languages.", 0, False),
     ], size=11.5)
 
@@ -266,11 +266,11 @@ def build():
     set_title(S[3], "Existing System / Literature Review")
     set_body(S[3], [
         ("Existing approach 1:", 0, True),
-        ("Traditional visual novel engines (Ren'Py, TyranoBuilder) — mature runtimes for playing a "
-         "visual novel, but they author nothing. Every line, sprite and background must be supplied "
+        ("Traditional visual novel engines (Ren'Py, TyranoBuilder) are mature runtimes for playing "
+         "a visual novel, but they author nothing. Every line, sprite and background must be supplied "
          "by the creator.", 0, False),
         ("Existing approach 2:", 0, True),
-        ("AI story generators (AI Dungeon, NovelAI) — generate prose interactively, but produce no "
+        ("AI story generators (AI Dungeon, NovelAI) generate prose interactively, but produce no "
          "consistent cast, no artwork tied to the narrative, and no fixed structure, so sessions "
          "drift and rarely reach a coherent ending.", 0, False),
         ("Existing approach 3:", 0, True),
@@ -290,8 +290,8 @@ def build():
     set_body(S[4], [
         ("System overview: A React single-page application talks to a FastAPI backend on Render. "
          "The backend orchestrates Gemini for text and images and Silk/Mulberry for speech, "
-         "persists to PostgreSQL, and writes generated assets to Google Cloud Storage — from where "
-         "the browser loads them directly, never through the server.", 0, False),
+         "persists to PostgreSQL, and writes generated assets to Google Cloud Storage, from where "
+         "the browser loads them directly rather than through the server.", 0, False),
     ], size=11)
     place(S[4], CHARTS / "architecture.png",
           Inches(0.45), Inches(2.55), W - Inches(0.9), Inches(4.5))
@@ -303,18 +303,18 @@ def build():
         ("Programming Languages:", 0, True),
         ("Python 3.14 (backend) · JavaScript / JSX (frontend)", 0, False),
         ("Frameworks:", 0, True),
-        ("1) FastAPI — async web framework, 40 REST endpoints", 0, False),
-        ("2) React 18 + Vite — single-page application and build tooling", 0, False),
-        ("3) LangGraph — multi-agent story generation pipeline", 0, False),
-        ("4) SQLAlchemy + Alembic — data access and schema migrations", 0, False),
+        ("1) FastAPI: async web framework, 40 REST endpoints", 0, False),
+        ("2) React 18 + Vite: single-page application and build tooling", 0, False),
+        ("3) LangGraph: multi-agent story generation pipeline", 0, False),
+        ("4) SQLAlchemy + Alembic: data access and schema migrations", 0, False),
         ("Databases & Storage:", 0, True),
-        ("1) PostgreSQL — 22 tables, 5 migrations", 0, False),
-        ("2) Google Cloud Storage — generated sprites, backgrounds and audio", 0, False),
+        ("1) PostgreSQL: 22 tables, 5 migrations", 0, False),
+        ("2) Google Cloud Storage: generated sprites, backgrounds and audio", 0, False),
         ("AI Services:", 0, True),
-        ("1) Gemini 3 Flash — story bible generation", 0, False),
-        ("2) Gemini 3.1 Flash-Lite — dialogue and beat expansion", 0, False),
-        ("3) Gemini 3.1 Flash-Lite Image — sprites, backgrounds, cover art", 0, False),
-        ("4) Silk / Mulberry — streaming voice synthesis", 0, False),
+        ("1) Gemini 3 Flash: story bible generation", 0, False),
+        ("2) Gemini 3.1 Flash-Lite: dialogue and beat expansion", 0, False),
+        ("3) Gemini 3.1 Flash-Lite Image: sprites, backgrounds, cover art", 0, False),
+        ("4) Silk / Mulberry: streaming voice synthesis", 0, False),
         ("Infrastructure:", 0, True),
         ("Render (Docker web service, static site, managed Postgres) · Cashfree Payments · "
          "Google OAuth 2.0 · Docker Compose · Git / GitHub", 0, False),
@@ -323,19 +323,19 @@ def build():
     # ---- 7 implementation -----------------------------------------------
     set_title(S[6], "Implementation / Demo")
     set_body(S[6], [
-        ("Feature 1 — Multi-agent story generation", 0, True),
+        ("Feature 1: Multi-agent story generation", 0, True),
         ("A LangGraph pipeline of plot, world, character and chapter agents, gated by a Memory "
          "critic that checks structural consistency and sends work back for revision. Produces a "
          "10-beat spine with five endings and an alignment-weighted choice model.", 0, False),
-        ("Feature 2 — Selective asset generation", 0, True),
+        ("Feature 2: Selective asset generation", 0, True),
         ("Dialogue text is generated before any image. The resulting script is then scanned for the "
-         "character expressions and scenes it actually references, and only those are drawn — "
-         "51% fewer images, with nothing lost that a player would ever see.", 0, False),
-        ("Feature 3 — Chroma-key sprite cutout", 0, True),
+         "character expressions and scenes it actually references, and only those are drawn. "
+         "That is 51% fewer images, with nothing lost that a player would ever see.", 0, False),
+        ("Feature 3: Chroma-key sprite cutout", 0, True),
         ("The image model is asked for a flat magenta background, removed afterwards by adaptive "
          "border-median colour-distance thresholding in numpy. Replacing an ML background remover "
          "with arithmetic cut the memory baseline from 750 MB to 129 MB.", 0, False),
-        ("Feature 4 — Prepaid credits and admission control", 0, True),
+        ("Feature 4: Prepaid credits and admission control", 0, True),
         ("Generation claims its slot and debits a credit in a single transaction of conditional "
          "writes, so concurrent requests cannot double-spend. A semaphore caps concurrent "
          "generations at three; beyond that they queue and the player is shown their position.", 0, False),
@@ -365,7 +365,7 @@ def build():
     grid9 = [
         ("05-reader.png", "Playing a generated story"),
         ("06-choices.png", "Branching choices"),
-        ("07-explore.png", "Explore — published stories"),
+        ("07-explore.png", "Explore: published stories"),
         ("08-library.png", None),   # labelled from whatever resolves
     ]
     gw = (W - Inches(0.9)) / 2
@@ -373,8 +373,8 @@ def build():
     for i, (fn, cap) in enumerate(grid9):
         if cap is None:
             f = shot(fn)
-            cap = ("Library — your stories" if f and "librar" in _norm(f.stem)
-                   else "Story page — ratings and comments")
+            cap = ("Library: your stories" if f and "librar" in _norm(f.stem)
+                   else "Story page: ratings and comments")
         cx = Inches(0.3) + (i % 2) * (gw + Inches(0.3))
         cy = Inches(0.72) + (i // 2) * (gh + Inches(0.18))
         src = shot(fn)
@@ -407,7 +407,7 @@ def build():
 
     # ---- 12 before / after -------------------------------------------------
     clear_all(S[11])
-    caption(S[11], "Optimisation — measured before and after", Inches(0.3), Inches(0.12),
+    caption(S[11], "Optimisation: measured before and after", Inches(0.3), Inches(0.12),
             W - Inches(0.6), size=16)
     place(S[11], CHARTS / "optimisation.png", Inches(0.25), Inches(0.75), W - Inches(0.5), Inches(3.1))
     place(S[11], CHARTS / "concurrency.png", Inches(1.9), Inches(4.05), Inches(6.2), Inches(3.1))
@@ -440,9 +440,9 @@ def build():
     set_title(S[13], "Conclusion & Future Work")
     set_body(S[13], [
         ("Conclusion:", 0, True),
-        ("StoryPlex demonstrates that a complete, playable visual novel — coherent branching story, "
-         "consistent illustrated cast, and voiced dialogue — can be generated end to end from a "
-         "short user premise. It is deployed and running as a real multi-user service with "
+        ("StoryPlex demonstrates that a complete, playable visual novel, with a coherent branching "
+         "story, a consistent illustrated cast and voiced dialogue, can be generated end to end "
+         "from a short user premise. It is deployed and running as a real multi-user service with "
          "authentication, payments and social features. Beyond the generation pipeline itself, the "
          "project's substantive results are engineering ones: cost per story reduced 58% and memory "
          "footprint 83%, both by changing what the system generates rather than by degrading what "
